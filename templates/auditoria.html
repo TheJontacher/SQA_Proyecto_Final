@@ -1,0 +1,59 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import paginacion %}
+{% block title %}Auditoría{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Auditoría</h2>
+    <p class="text-gray-500 mt-1">Quién hizo qué y cuándo con el dinero, las ventas, los usuarios y la facturación. No guarda contraseñas.</p>
+</div>
+
+<form method="GET" class="flex flex-wrap items-end gap-3 mb-5">
+    <div>
+        <label for="a-modulo" class="block text-xs text-gray-500 mb-1">Módulo</label>
+        <select id="a-modulo" name="modulo" class="input-custom bg-white rounded-lg px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {% for m in modulos %}<option value="{{ m }}" {{ 'selected' if m == modulo }}>{{ m }}</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="a-q" class="block text-xs text-gray-500 mb-1">Buscar</label>
+        <input id="a-q" type="text" name="q" value="{{ texto }}" placeholder="Texto o usuario…" class="input-custom bg-white rounded-lg px-3 py-2 text-sm">
+    </div>
+    <button class="btn-primary px-4 py-2 rounded-lg text-sm font-bold">Filtrar</button>
+</form>
+
+<div class="bg-white rounded-lg shadow-md content-card overflow-hidden">
+    {% if registros %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="table-header text-xs uppercase">
+                <tr>
+                    <th class="text-left px-4 py-3">Fecha</th>
+                    <th class="text-left px-4 py-3">Usuario</th>
+                    <th class="text-left px-4 py-3">Módulo</th>
+                    <th class="text-left px-4 py-3">Acción</th>
+                    <th class="text-left px-4 py-3">Detalle</th>
+                    <th class="text-left px-4 py-3">IP</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for r in registros %}
+                <tr class="hover:bg-gray-50 align-top">
+                    <td class="px-4 py-3 text-gray-500 whitespace-nowrap num">{{ r.creado_en | local }}</td>
+                    <td class="px-4 py-3 text-gray-700">{{ r.usuario or '—' }}</td>
+                    <td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{{ r.modulo }}</span></td>
+                    <td class="px-4 py-3 text-gray-600 font-mono text-xs">{{ r.accion }}</td>
+                    <td class="px-4 py-3 text-gray-700 min-w-[16rem] break-words">{{ r.descripcion }}</td>
+                    <td class="px-4 py-3 text-gray-400 text-xs font-mono">{{ r.ip or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-sm text-gray-500 text-center">Todavía no hay acciones registradas.</p>
+    {% endif %}
+</div>
+{{ paginacion(pag) }}
+{% endblock %}

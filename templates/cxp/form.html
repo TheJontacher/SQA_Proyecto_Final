@@ -1,0 +1,48 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver %}
+{% block title %}Registrar factura de proveedor{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.cxp_lista'), 'Volver a cuentas por pagar') }}
+<h2 class="text-3xl font-bold text-petroleo mb-1">Registrar factura de proveedor</h2>
+<p class="text-gray-500 mb-6">Lo que la clínica debe. Cuando la pagues, el dinero saldrá de la caja, del fondo o de tarjetas por consolidar.</p>
+
+<form method="POST" enctype="multipart/form-data" class="max-w-2xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="id_proveedor" class="block text-sm text-gray-600 mb-1">Proveedor *</label>
+            <select id="id_proveedor" name="id_proveedor" required class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                <option value="">Selecciona…</option>
+                {% for p in proveedores %}<option value="{{ p.id }}" {{ 'selected' if form.get('id_proveedor') == p.id | string }}>{{ p.nombre }}</option>{% endfor %}
+            </select>
+            <a href="{{ url_for('dinero.proveedor_nuevo') }}" class="text-xs text-petroleo underline mt-1 inline-block">+ Nuevo proveedor</a>
+        </div>
+        <div>
+            <label for="monto" class="block text-sm text-gray-600 mb-1">Monto (Q) *</label>
+            <input id="monto" type="number" name="monto" min="0.01" step="0.01" required value="{{ form.get('monto', '') }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div>
+        <label for="descripcion" class="block text-sm text-gray-600 mb-1">Descripción *</label>
+        <input id="descripcion" type="text" name="descripcion" required minlength="3" maxlength="300" autocomplete="off" value="{{ form.get('descripcion', '') }}" placeholder="Ej. Factura 4521 — sueros y cremas" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="fecha_emision" class="block text-sm text-gray-600 mb-1">Fecha de emisión</label>
+            <input id="fecha_emision" type="date" name="fecha_emision" max="{{ hoy }}" value="{{ form.get('fecha_emision', hoy) }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+        <div>
+            <label for="fecha_vencimiento" class="block text-sm text-gray-600 mb-1">Fecha de vencimiento</label>
+            <input id="fecha_vencimiento" type="date" name="fecha_vencimiento" value="{{ form.get('fecha_vencimiento', '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div>
+        <label for="comprobante" class="block text-sm text-gray-600 mb-1">Comprobante (PDF o imagen, opcional)</label>
+        <input id="comprobante" type="file" name="comprobante" accept=".pdf,image/*" class="w-full text-sm text-gray-500">
+    </div>
+    <div class="flex gap-3">
+        <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Registrar</button>
+        <a href="{{ url_for('dinero.cxp_lista') }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

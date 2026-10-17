@@ -1,0 +1,91 @@
+{# Piezas compartidas: paginación, botón de consulta de NIT y selector de paciente. #}
+
+{% macro paginacion(pag) -%}
+{% if pag and pag.paginas > 1 %}
+<nav aria-label="Paginación" class="no-print mt-5 flex items-center justify-between gap-3 text-sm">
+    <p class="text-gray-500">
+        <span class="num">{{ pag.offset + 1 }}–{{ [pag.offset + pag.por_pagina, pag.total] | min }}</span> de <span class="num">{{ pag.total }}</span>
+    </p>
+    <div class="flex items-center gap-2">
+        {% if pag.pagina > 1 %}
+        <a href="{{ url_pagina(pag.pagina - 1) }}" rel="prev" class="border border-gray-200 bg-white rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">Anterior</a>
+        {% endif %}
+        <span class="text-gray-500 num">Página {{ pag.pagina }} de {{ pag.paginas }}</span>
+        {% if pag.pagina < pag.paginas %}
+        <a href="{{ url_pagina(pag.pagina + 1) }}" rel="next" class="border border-gray-200 bg-white rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-50 transition-colors">Siguiente</a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+{%- endmacro %}
+
+{# Botón "Buscar nombre por NIT": usa buscarNitEn() del layout y la facturación electrónica configurada. #}
+{% macro boton_nit(nit_id, nombre_id) %}
+<div class="mt-1.5">
+    <button type="button" onclick="buscarNitEn('{{ nit_id }}', '{{ nombre_id }}', this, 'estado-{{ nit_id }}')"
+            class="text-xs font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2">Buscar nombre por NIT</button>
+    <p id="estado-{{ nit_id }}" class="text-xs mt-1 hidden" role="status" aria-live="polite"></p>
+</div>
+{% endmacro %}
+
+{# Selector de paciente con búsqueda. Deja el id elegido en el campo oculto `nombre`. #}
+{% macro selector_paciente(nombre='id_paciente') %}
+<div class="relative">
+    <input type="text" id="sp-texto" autocomplete="off" placeholder="Buscar paciente por nombre, teléfono o NIT…"
+           class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600">
+    <input type="hidden" id="sp-id" name="{{ nombre }}" required>
+    <div id="sp-resultados" class="hidden absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg"></div>
+    <p id="sp-elegido" class="hidden text-xs text-brand-700 mt-1"></p>
+</div>
+<script>
+(function () {
+    const texto = document.getElementById('sp-texto'), id = document.getElementById('sp-id');
+    const caja = document.getElementById('sp-resultados'), elegido = document.getElementById('sp-elegido');
+    let espera;
+    texto.addEventListener('input', () => {
+        id.value = ''; elegido.classList.add('hidden');
+        clearTimeout(espera);
+        if (texto.value.trim().length < 2) { caja.classList.add('hidden'); return; }
+        espera = setTimeout(async () => {
+            const datos = await (await fetch('/api/pacientes/buscar?q=' + encodeURIComponent(texto.value.trim()), { credentials: 'same-origin' })).json();
+            caja.replaceChildren();
+            if (!datos.length) {
+                const vacio = document.createElement('div');
+                vacio.className = 'px-3 py-2 text-sm text-gray-500'; vacio.textContent = 'Sin resultados.';
+                caja.appendChild(vacio);
+            }
+            datos.forEach(p => {
+                const fila = document.createElement('button');
+                fila.type = 'button';
+                fila.className = 'w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100';
+                fila.textContent = p.nombre + ' ' + p.apellido + (p.telefono ? ' · ' + p.telefono : '');
+                fila.addEventListener('click', () => {
+                    id.value = p.id; texto.value = p.nombre + ' ' + p.apellido;
+                    elegido.textContent = 'Paciente seleccionado' + (p.nit ? ' · NIT ' + p.nit : '');
+                    elegido.classList.remove('hidden'); caja.classList.add('hidden');
+                });
+                caja.appendChild(fila);
+            });
+            caja.classList.remove('hidden');
+        }, 200);
+    });
+    document.addEventListener('click', (e) => { if (!caja.contains(e.target) && e.target !== texto) caja.classList.add('hidden'); });
+    texto.form.addEventListener('submit', (e) => {
+        if (!id.value) { e.preventDefault(); texto.focus(); texto.setCustomValidity('Elige un paciente de la lista.'); texto.reportValidity(); }
+    });
+    texto.addEventListener('input', () => texto.setCustomValidity(''));
+})();
+</script>
+{% endmacro %}
+
+{# Insignia de estado de una cuenta (por cobrar / por pagar). #}
+{% macro estado_cuenta(estado) -%}
+<span class="text-xs font-medium px-2 py-0.5 rounded-full
+    {% if estado == 'Pagada' %}bg-brand-50 text-brand-700{% elif estado == 'Anulada' %}bg-gray-100 text-gray-500{% elif estado == 'Parcial' %}bg-blue-50 text-blue-700{% else %}bg-amber-50 text-amber-700{% endif %}">{{ estado }}</span>
+{%- endmacro %}
+
+{% macro volver(url, texto) -%}
+<a href="{{ url }}" class="no-print text-sm text-gray-500 hover:text-gray-600 inline-flex items-center gap-1 mb-5">
+    <i class="fas fa-chevron-left text-xs"></i> {{ texto }}
+</a>
+{%- endmacro %}

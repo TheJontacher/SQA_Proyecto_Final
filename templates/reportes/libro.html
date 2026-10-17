@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% from 'reportes/_comun.html' import tabs, filtros with context %}
+{% from '_macros.html' import paginacion %}
+{% block title %}Libro de dinero{% endblock %}
+
+{% block content %}
+<h2 class="text-3xl font-bold text-petroleo mb-5">Reportes</h2>
+{{ tabs('libro') }}
+{{ filtros(endpoint, desde, hasta, hoy_iso, hasta_menos_semana, inicio_mes_iso, extra={'cuenta': cuenta} if cuenta else {}) }}
+
+<div class="no-print flex gap-2 mb-5">
+    {% for clave, nombre in [('', 'Todas las cuentas'), ('caja', 'Caja'), ('fondo', 'Fondo'), ('por_consolidar', 'Por consolidar')] %}
+    <a href="{{ url_for('dinero.reporte_libro', desde=desde.isoformat(), hasta=hasta.isoformat(), cuenta=clave) }}"
+       class="text-sm px-4 py-1.5 rounded-full border {{ 'bg-brand-600 text-white border-brand-600' if cuenta == clave else 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' }}">{{ nombre }}</a>
+    {% endfor %}
+</div>
+
+<div class="grid sm:grid-cols-3 gap-4 mb-6 max-w-3xl">
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Entró (sin traslados)</p><p class="num text-xl font-semibold text-brand-700 mt-1">{{ entradas | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Salió (sin traslados)</p><p class="num text-xl font-semibold text-red-600 mt-1">{{ salidas | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Movimientos</p><p class="num text-xl font-semibold mt-1">{{ total }}</p></div>
+</div>
+
+<section class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+    {% if movs %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-gray-500 text-xs uppercase">
+                <tr class="border-b border-gray-100"><th class="text-left px-4 py-2.5">Fecha</th><th class="text-left px-4 py-2.5">Cuenta</th><th class="text-left px-4 py-2.5">Movimiento</th><th class="text-right px-4 py-2.5">Entrada</th><th class="text-right px-4 py-2.5">Salida</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for m in movs %}
+                <tr class="align-top {{ 'bg-gray-50 text-gray-500' if m.tipo in internos }}">
+                    <td class="px-4 py-3 whitespace-nowrap num">{{ m.fecha | local }}</td>
+                    <td class="px-4 py-3">{{ nombres_cuenta[m.cuenta] }}</td>
+                    <td class="px-4 py-3 min-w-[14rem]">
+                        <p class="text-ink-900">{{ etiquetas.get(m.tipo, m.tipo) }}{% if m.naturaleza %} <span class="text-xs text-gray-500">· {{ naturalezas.get(m.naturaleza, m.naturaleza) }}</span>{% endif %}</p>
+                        <p class="text-xs text-gray-500 break-words">{{ m.concepto }}{% if m.usuario %} · {{ m.usuario }}{% endif %}</p>
+                    </td>
+                    <td class="px-4 py-3 text-right num text-brand-700">{{ ('+' ~ (m.monto | q)) if m.entrada else '' }}</td>
+                    <td class="px-4 py-3 text-right num text-red-600">{{ ('−' ~ (m.monto | q)) if not m.entrada else '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="px-5 py-10 text-sm text-gray-500 text-center">No hay movimientos en este periodo.</p>{% endif %}
+</section>
+{{ paginacion(pag) }}
+<p class="mt-3 text-xs text-gray-500">Las filas en gris son traslados entre cuentas (apertura y cierre de caja, consolidación): no son dinero que entra ni sale de la clínica.</p>
+{% endblock %}

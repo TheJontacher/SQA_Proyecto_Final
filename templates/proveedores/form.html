@@ -1,0 +1,28 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver, boton_nit %}
+{% block title %}{{ 'Editar' if proveedor else 'Nuevo' }} proveedor{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.proveedores_lista'), 'Volver a proveedores') }}
+<h2 class="text-3xl font-bold text-petroleo mb-6">{{ 'Editar proveedor' if proveedor else 'Nuevo proveedor' }}</h2>
+
+<form method="POST" class="max-w-xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div>
+        <label for="nit" class="block text-sm text-gray-600 mb-1">NIT</label>
+        <input id="nit" type="text" name="nit" autocomplete="off" value="{{ form.get('nit', proveedor.nit if proveedor else '') or '' }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        {{ boton_nit('nit', 'nombre') }}
+    </div>
+    <div>
+        <label for="nombre" class="block text-sm text-gray-600 mb-1">Nombre *</label>
+        <input id="nombre" type="text" name="nombre" required maxlength="150" value="{{ form.get('nombre', proveedor.nombre if proveedor else '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div>
+        <label for="telefono" class="block text-sm text-gray-600 mb-1">Teléfono</label>
+        <input id="telefono" type="text" name="telefono" maxlength="30" value="{{ form.get('telefono', proveedor.telefono if proveedor else '') or '' }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div class="flex gap-3">
+        <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar</button>
+        <a href="{{ url_for('dinero.proveedores_lista') }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

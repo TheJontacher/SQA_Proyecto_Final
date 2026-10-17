@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - Clínica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { colors: { clinica: { primary: '#23807A', bg: '#F3E2DA', surface: '#ffffff' } } } } }
+    </script>
+</head>
+<body class="bg-clinica-bg min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="bg-clinica-primary p-6 flex flex-col items-center">
+            <div class="bg-white p-3 rounded-full shadow-lg mb-3">
+                <img src="{{ url_for('static', filename='img/LOGOTIPO.png') }}" alt="Logo" class="h-14 w-auto object-contain">
+            </div>
+            <h2 class="text-lg font-bold text-white tracking-widest uppercase">{% block encabezado %}{% endblock %}</h2>
+        </div>
+        <div class="p-8 pt-6">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% for category, message in messages %}
+                <div class="mb-4 p-3 rounded text-sm text-center font-medium {% if category == 'error' %}bg-red-100 text-red-700{% elif category == 'warning' %}bg-amber-100 text-amber-800{% else %}bg-blue-100 text-blue-700{% endif %}" role="alert">{{ message }}</div>
+              {% endfor %}
+            {% endwith %}
+            {% block cuerpo %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

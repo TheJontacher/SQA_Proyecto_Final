@@ -88,28 +88,31 @@
     </div>
     
     <div class="flex flex-wrap gap-2">
-        <!-- BOTÓN VOLVER -->
-        {% if venta.saldo_pendiente > 0 %}
-            <a href="{{ url_for('creditos') }}" class="btn-secondary px-4 py-2 rounded-md shadow-sm font-medium">
-                <i class="fas fa-arrow-left mr-2"></i>Volver a Créditos
-            </a>
-        {% else %}
-            <a href="{{ url_for('ventas') }}" class="btn-secondary px-4 py-2 rounded-md shadow-sm font-medium">
-                <i class="fas fa-arrow-left mr-2"></i>Volver a Ventas
+        {% if cuenta and cuenta.estado in ('Pendiente', 'Parcial') %}
+            <a href="{{ url_for('dinero.cxc_detalle', id_cuenta=cuenta.id) }}" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 font-bold shadow-sm">
+                <i class="fas fa-money-bill-wave mr-2"></i>Cobrar saldo
             </a>
         {% endif %}
-        
-        <!-- BOTÓN CANCELAR -->
-        {% if venta.estado != 'Cancelada' and not abonos %}
-            <form action="{{ url_for('cancelar_venta', id_venta=venta.id) }}" method="POST" onsubmit="return confirm('ATENCIÓN:\n¿Estás seguro de que deseas CANCELAR esta venta?\n\n- El stock de los productos será devuelto al inventario.\n- El dinero de esta venta se descontará de la caja.\n- Esta acción no se puede deshacer.');">
-                <button type="submit" class="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-md hover:bg-red-100 transition font-bold shadow-sm flex items-center">
-                    <i class="fas fa-ban mr-2"></i> Anular Venta
-                </button>
-            </form>
-        {% elif venta.estado != 'Cancelada' and abonos %}
-             <span class="bg-gray-100 text-gray-400 border border-gray-200 px-3 py-2 rounded-md text-xs flex items-center cursor-not-allowed" title="No se puede cancelar una venta con abonos registrados.">
-                <i class="fas fa-lock mr-2"></i> No cancelable (Tiene abonos)
+        <a href="{{ url_for('ventas') }}" class="btn-secondary px-4 py-2 rounded-md shadow-sm font-medium">
+            <i class="fas fa-arrow-left mr-2"></i>Volver a Ventas
+        </a>
+
+        {% if puede_facturar %}
+        <button type="button" onclick="document.getElementById('modalFactura').classList.remove('hidden')" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition font-bold shadow-sm">
+            <i class="fas fa-file-invoice mr-2"></i>{{ 'Reintentar factura' if factura else 'Emitir factura' }}
+        </button>
+        {% endif %}
+
+        {% if venta.estado != 'Cancelada' and current_user.rol == 'admin' %}
+            {% if no_cancelable %}
+             <span class="bg-gray-100 text-gray-500 border border-gray-200 px-3 py-2 rounded-md text-xs flex items-center cursor-not-allowed max-w-xs" title="{{ no_cancelable }}">
+                <i class="fas fa-lock mr-2"></i> No se puede cancelar
              </span>
+            {% else %}
+            <button type="button" onclick="document.getElementById('modalCancelar').classList.remove('hidden')" class="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-md hover:bg-red-100 transition font-bold shadow-sm flex items-center">
+                <i class="fas fa-ban mr-2"></i> Cancelar venta
+            </button>
+            {% endif %}
         {% endif %}
 
         <button onclick="window.print();" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition flex items-center shadow-md font-bold">
@@ -117,6 +120,39 @@
         </button>
     </div>
 </div>
+
+{% if no_cancelable and venta.estado != 'Cancelada' and current_user.rol == 'admin' %}
+<p class="no-print mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3">{{ no_cancelable }}</p>
+{% endif %}
+
+<!-- ESTADO DE LA FACTURA ELECTRÓNICA -->
+{% if factura %}
+<div class="no-print mb-5 rounded-xl border px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3
+    {% if factura.estado == 'certificado' %}border-brand-200 bg-brand-50 text-brand-800{% elif factura.estado == 'anulado' %}border-gray-200 bg-gray-50 text-gray-600{% elif factura.estado in ('error', 'indeterminado') %}border-red-200 bg-red-50 text-red-700{% else %}border-amber-200 bg-amber-50 text-amber-800{% endif %}">
+    <div>
+        <strong><i class="fas fa-file-invoice mr-1"></i> Factura electrónica: {{ factura.estado | capitalize }}</strong>
+        {% if factura.numero_autorizacion %}<span class="block text-xs font-mono break-all">Autorización {{ factura.numero_autorizacion }} · Serie {{ factura.serie }} · No. {{ factura.numero }}</span>{% endif %}
+        <span class="block text-xs">Receptor: {{ factura.nombre_receptor }} ({{ factura.nit_receptor }}) · {{ 'ambiente de prueba' if factura.ambiente == 'test' else 'producción' }}</span>
+        {% if factura.mensaje_error %}<span class="block text-xs mt-1">{{ factura.mensaje_error }}</span>{% endif %}
+        {% if factura.estado == 'anulado' and factura.motivo_anulacion %}<span class="block text-xs mt-1">Motivo de anulación: {{ factura.motivo_anulacion }}</span>{% endif %}
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+        {% if factura.pdf_base64 %}<a class="font-bold underline" href="{{ url_for('facturacion.descargar', id_factura=factura.id, tipo='pdf') }}">PDF</a>{% endif %}
+        {% if factura.xml_base64 %}<a class="font-bold underline" href="{{ url_for('facturacion.descargar', id_factura=factura.id, tipo='xml') }}">XML</a>{% endif %}
+        {% if factura.anulacion_pdf_base64 %}<a class="font-bold underline" href="{{ url_for('facturacion.descargar', id_factura=factura.id, tipo='cancel_pdf') }}">PDF de anulación</a>{% endif %}
+        {% if factura.estado == 'certificado' and current_user.rol == 'admin' %}
+        <details class="relative">
+            <summary class="cursor-pointer list-none text-red-700 border border-red-300 bg-white px-3 py-1 rounded-lg text-xs font-bold">Anular factura</summary>
+            <form method="POST" action="{{ url_for('facturacion.anular', id_factura=factura.id) }}" class="absolute right-0 z-10 mt-2 w-72 bg-white text-gray-700 border border-gray-200 rounded-xl shadow-lg p-3 space-y-2">
+                <label for="fel-motivo" class="block text-xs font-medium">Motivo de la anulación ante SAT *</label>
+                <input id="fel-motivo" type="text" name="motivo" required minlength="5" maxlength="250" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                <button class="w-full bg-red-600 text-white text-xs font-semibold py-2 rounded-lg hover:bg-red-700">Anular factura</button>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
 <!-- CUERPO DEL RECIBO (Visualización Papel) -->
 <div class="receipt-container bg-white p-8 lg:p-10 shadow-lg relative overflow-hidden max-w-4xl mx-auto border-t-8" style="border-top-color: var(--color-arena);">
@@ -147,8 +183,9 @@
             </div>
         </div>
         <div class="text-right text-sm text-gray-600">
-            <p class="mb-1"><strong>Fecha:</strong> {{ venta.fecha_venta|db_datetime(true) }}</p>
-            <p><strong>Hora:</strong> {{ venta.fecha_venta|db_datetime(false, true) }}</p>
+            <p class="mb-1"><strong>Fecha:</strong> {{ venta.fecha_venta | local('%d/%m/%Y') }}</p>
+            <p><strong>Hora:</strong> {{ venta.fecha_venta | local('%H:%M') }}</p>
+            {% if venta.vendedor %}<p class="mt-1 text-xs text-gray-400">Atendió: {{ venta.vendedor }}</p>{% endif %}
         </div>
     </header>
     
@@ -157,8 +194,13 @@
         <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Paciente</h4>
         <div class="flex flex-col md:flex-row md:items-center gap-4">
             <div>
-                <span class="block font-bold text-lg text-gray-800">{{ venta.nombre }} {{ venta.apellido }}</span>
+                <span class="block font-bold text-lg text-gray-800">{{ venta.nombre or '(paciente eliminado)' }} {{ venta.apellido or '' }}</span>
             </div>
+            {% if venta.nit %}
+            <div class="md:border-l md:pl-4 md:border-gray-300">
+                <span class="text-gray-600">NIT <span class="font-mono">{{ venta.nit }}</span></span>
+            </div>
+            {% endif %}
             {% if venta.telefono %}
             <div class="md:border-l md:pl-4 md:border-gray-300">
                 <span class="text-gray-600"><i class="fas fa-phone-alt mr-2 text-gray-400"></i>{{ venta.telefono }}</span>
@@ -184,11 +226,11 @@
                 <tr>
                     <td class="py-3 px-4 font-medium text-gray-700">{{ d.nombre_item }}</td>
                     <td class="py-3 px-4 text-center text-gray-600">{{ d.cantidad }}</td>
-                    <td class="py-3 px-4 text-right text-gray-600">Q{{ "%.2f"|format(d.precio_unitario) }}</td>
+                    <td class="py-3 px-4 text-right text-gray-600">{{ (d.precio_unitario) | q }}</td>
                     <td class="py-3 px-4 text-right text-red-500 font-mono text-xs">
-                        {% if d.descuento > 0 %}-Q{{ "%.2f"|format(d.descuento) }}{% else %}-{% endif %}
+                        {% if d.descuento > 0 %}-{{ (d.descuento) | q }}{% else %}-{% endif %}
                     </td>
-                    <td class="py-3 px-4 text-right font-bold text-gray-800">Q{{ "%.2f"|format((d.precio_unitario - d.descuento) * d.cantidad) }}</td>
+                    <td class="py-3 px-4 text-right font-bold text-gray-800">{{ ((d.precio_unitario - d.descuento) * d.cantidad) | q }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -200,26 +242,26 @@
         <div class="w-full md:w-1/2 lg:w-5/12 bg-gray-50 p-4 rounded-lg border border-gray-100">
             <div class="flex justify-between text-gray-600 mb-1">
                 <span>Subtotal:</span>
-                <span class="font-mono">Q{{ "%.2f"|format(subtotal) }}</span>
+                <span class="font-mono">{{ (subtotal) | q }}</span>
             </div>
             
             {% if venta.descuento_total > 0 %}
             <div class="flex justify-between text-red-500 mb-2">
                 <span>Descuento Extra:</span>
-                <span class="font-mono font-bold">-Q{{ "%.2f"|format(venta.descuento_total) }}</span>
+                <span class="font-mono font-bold">-{{ (venta.descuento_total) | q }}</span>
             </div>
             {% endif %}
             
             <div class="border-t border-gray-300 my-2 pt-2 flex justify-between items-center">
                 <span class="text-gray-800 font-bold text-lg">Total Venta:</span>
-                <span class="text-petroleo font-black text-2xl">Q{{ "%.2f"|format(venta.monto_total) }}</span>
+                <span class="text-petroleo font-black text-2xl">{{ (venta.monto_total) | q }}</span>
             </div>
 
             <!-- SALDO PENDIENTE -->
             {% if venta.saldo_pendiente > 0 %}
                 <div class="mt-3 pt-2 border-t border-dashed border-gray-300 flex justify-between items-center text-red-600 bg-red-50 px-2 py-1 rounded">
                     <span class="font-bold text-sm">Saldo Pendiente:</span>
-                    <span class="font-bold text-lg">Q{{ "%.2f"|format(venta.saldo_pendiente) }}</span>
+                    <span class="font-bold text-lg">{{ (venta.saldo_pendiente) | q }}</span>
                 </div>
             {% endif %}
         </div>
@@ -243,11 +285,11 @@
                 <tbody class="divide-y divide-gray-100">
                     {% for abono in abonos %}
                     <tr class="hover:bg-gray-50">
-                        <td class="py-2 px-4 whitespace-nowrap">{{ abono.fecha_abono|db_datetime }}</td>
-                        <td class="py-2 px-4 font-medium">{{ abono.metodo_pago }}</td>
+                        <td class="py-2 px-4 whitespace-nowrap">{{ abono.fecha_abono | local }}</td>
+                        <td class="py-2 px-4 font-medium">{{ abono.metodo_pago | etiqueta_metodo }}</td>
                         <td class="py-2 px-4 text-gray-500 font-mono">{{ abono.referencia_pago or '-' }}</td>
-                        <td class="py-2 px-4 text-right font-bold text-green-600">+Q{{ "%.2f"|format(abono.monto) }}</td>
-                        <td class="py-2 px-4 text-right text-gray-400 font-mono">Q{{ "%.2f"|format(abono.saldo_actual_snapshot | default(0)) }}</td>
+                        <td class="py-2 px-4 text-right font-bold text-green-600">+{{ (abono.monto) | q }}</td>
+                        <td class="py-2 px-4 text-right text-gray-400 font-mono">{{ (abono.saldo_actual_snapshot | default(0)) | q }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -260,7 +302,7 @@
     <footer class="mt-10 pt-6 border-t border-gray-200 text-center relative z-10">
         <p class="text-sm font-bold text-gray-700 mb-1">Detalles del Pago Inicial</p>
         <p class="text-xs text-gray-500">
-            Método: <span class="font-medium text-gray-700">{{ venta.metodo_pago }}</span>
+            Método: <span class="font-medium text-gray-700">{{ venta.metodo_pago | etiqueta_metodo }}</span>
             {% if venta.referencia_pago %}
              | Ref: <span class="font-mono text-gray-700">{{ venta.referencia_pago }}</span>
             {% endif %}
@@ -268,6 +310,76 @@
         <p class="text-[10px] text-gray-400 mt-4 uppercase tracking-widest">Gracias por su confianza</p>
     </footer>
 </div>
+
+
+<!-- MODAL: CANCELAR VENTA -->
+{% if venta.estado != 'Cancelada' and current_user.rol == 'admin' and not no_cancelable %}
+<div id="modalCancelar" class="no-print fixed inset-0 bg-gray-900 bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
+        <div class="bg-red-600 p-4 text-white flex justify-between items-center"><h3 class="font-bold"><i class="fas fa-ban mr-2"></i>Cancelar la venta #{{ venta.id }}</h3>
+            <button type="button" onclick="document.getElementById('modalCancelar').classList.add('hidden')" aria-label="Cerrar"><i class="fas fa-times"></i></button></div>
+        <form method="POST" action="{{ url_for('cancelar_venta', id_venta=venta.id) }}" class="p-6 space-y-4">
+            <ul class="text-xs text-gray-600 list-disc list-inside space-y-0.5">
+                <li>El stock de los productos vuelve al inventario.</li>
+                {% if opciones_reembolso %}<li>El dinero cobrado ({{ venta.monto_total | q }}) debe salir de algún lado.</li>{% endif %}
+                {% if cuenta %}<li>Su cuenta por cobrar se anula.</li>{% endif %}
+                <li>No se puede deshacer.</li>
+            </ul>
+            <div>
+                <label for="cancel-motivo" class="block text-sm font-bold text-gray-700 mb-1">Motivo *</label>
+                <input id="cancel-motivo" type="text" name="motivo" required minlength="5" maxlength="250" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+            </div>
+            {% if opciones_reembolso %}
+            <fieldset>
+                <legend class="text-sm font-bold text-gray-700 mb-1">¿De dónde sale el dinero a devolver? *</legend>
+                <div class="space-y-2">
+                    {% for clave, etiqueta, saldo in opciones_reembolso %}
+                    <label class="cursor-pointer block">
+                        <input type="radio" name="origen" value="{{ clave }}" class="sr-only peer" {{ 'checked' if loop.first }}>
+                        <span class="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-2.5 text-sm peer-checked:border-red-500 peer-checked:ring-1 peer-checked:ring-red-500 peer-checked:bg-red-50">
+                            <span>{{ etiqueta }}</span>{% if saldo is not none %}<span class="num text-xs text-gray-500">{{ saldo | q }}</span>{% endif %}
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endif %}
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" onclick="document.getElementById('modalCancelar').classList.add('hidden')" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-md font-medium">Volver</button>
+                <button class="px-4 py-2 bg-red-600 text-white rounded-md font-bold hover:bg-red-700">Cancelar venta</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- MODAL: EMITIR FACTURA -->
+{% if puede_facturar %}
+<div id="modalFactura" class="no-print fixed inset-0 bg-gray-900 bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
+        <div class="bg-indigo-600 p-4 text-white flex justify-between items-center"><h3 class="font-bold"><i class="fas fa-file-invoice mr-2"></i>Emitir factura electrónica</h3>
+            <button type="button" onclick="document.getElementById('modalFactura').classList.add('hidden')" aria-label="Cerrar"><i class="fas fa-times"></i></button></div>
+        <form method="POST" action="{{ url_for('facturacion.facturar', id_venta=venta.id) }}" class="p-6 space-y-4">
+            <p class="text-sm text-gray-600">Total a facturar: <strong class="num">{{ venta.monto_total | q }}</strong> (IVA incluido). Deja el NIT vacío o escribe <strong>CF</strong> para facturar a Consumidor Final.</p>
+            <div>
+                <label for="fel-nit" class="block text-sm font-bold text-gray-700 mb-1">NIT del receptor</label>
+                <input id="fel-nit" type="text" name="nit_receptor" autocomplete="off" value="{{ venta.nit or '' }}" placeholder="CF" class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                <button type="button" onclick="buscarNitEn('fel-nit', 'fel-nombre', this, 'estado-fel-nit')" class="mt-1.5 text-xs font-medium text-indigo-700 underline">Buscar nombre por NIT</button>
+                <p id="estado-fel-nit" class="text-xs mt-1 hidden" role="status"></p>
+            </div>
+            <div>
+                <label for="fel-nombre" class="block text-sm font-bold text-gray-700 mb-1">Nombre del receptor</label>
+                <input id="fel-nombre" type="text" name="nombre_receptor" maxlength="100" value="{{ venta.nombre }} {{ venta.apellido }}" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+            </div>
+            <p class="text-xs text-gray-500">La factura se certifica ante SAT y queda con la fecha y hora de este momento. Si algo estuviera mal, se anula desde esta misma pantalla.</p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" onclick="document.getElementById('modalFactura').classList.add('hidden')" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-md font-medium">Volver</button>
+                <button class="px-4 py-2 bg-indigo-600 text-white rounded-md font-bold hover:bg-indigo-700">Emitir factura</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {

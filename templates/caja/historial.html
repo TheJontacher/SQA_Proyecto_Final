@@ -1,0 +1,75 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import paginacion, volver %}
+{% block title %}Historial de caja{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.caja'), 'Volver a caja') }}
+
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+    <div>
+        <h2 class="text-3xl font-bold text-petroleo">Historial de caja</h2>
+        <p class="text-gray-500 mt-1">Todos los turnos, con lo esperado, lo contado y la diferencia.</p>
+    </div>
+    <a href="{{ url_for('dinero.reporte_periodo') }}" target="_blank" class="bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-md text-sm hover:bg-gray-50 self-start">
+        <i class="fas fa-print mr-2"></i>Reporte imprimible de ventas
+    </a>
+</div>
+
+<div class="bg-white rounded-lg shadow-md content-card overflow-hidden">
+    {% if turnos %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="table-header text-xs uppercase">
+                <tr>
+                    <th class="text-left px-4 py-3">Turno</th>
+                    <th class="text-left px-4 py-3">Abierto</th>
+                    <th class="text-left px-4 py-3">Cerrado</th>
+                    <th class="text-right px-4 py-3">Inicial</th>
+                    <th class="text-right px-4 py-3">Esperado</th>
+                    <th class="text-right px-4 py-3">Contado</th>
+                    <th class="text-center px-4 py-3">Diferencia</th>
+                    <th class="text-left px-4 py-3">Responsable</th>
+                    <th class="px-4 py-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for c in turnos %}
+                <tr class="hover:bg-gray-50 align-top">
+                    <td class="px-4 py-3 font-bold text-petroleo">#{{ c.id }}<span class="block text-xs font-normal text-gray-400">{{ c.n_ventas }} venta(s)</span></td>
+                    <td class="px-4 py-3 text-gray-500 whitespace-nowrap num">{{ c.fecha_apertura | local }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap num">
+                        {% if c.fecha_cierre %}<span class="text-gray-500">{{ c.fecha_cierre | local }}</span>{% else %}<span class="text-brand-600 font-bold">Abierto</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-700">{{ c.monto_inicial | q }}</td>
+                    <td class="px-4 py-3 text-right text-gray-500">{{ c.monto_final_calculado | q if c.monto_final_calculado is not none else '—' }}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-gray-800">{{ c.monto_final_real | q if c.monto_final_real is not none else '—' }}</td>
+                    <td class="px-4 py-3 text-center">
+                        {% if c.estado == 'Abierta' %}
+                            <span class="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold">En curso</span>
+                        {% else %}
+                            {% set dif = c.diferencia or 0 %}
+                            {% if dif == 0 %}<span class="text-xs px-2 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-200 font-bold">Cuadre</span>
+                            {% elif dif > 0 %}<span class="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold">+{{ dif | q }}</span>
+                            {% else %}<span class="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 font-bold">−{{ (dif | abs) | q }}</span>{% endif %}
+                        {% endif %}
+                        {% if c.notas %}<p class="text-xs text-gray-500 mt-1 max-w-[12rem] break-words">{{ c.notas }}</p>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-500 text-xs">{{ c.abrio or '—' }}{% if c.cerro and c.cerro != c.abrio %}<br>cerró {{ c.cerro }}{% endif %}</td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <a href="{{ url_for('dinero.caja_turno', id_caja=c.id) }}" class="text-xs text-petroleo underline">Ver</a>
+                        {% if c.fecha_cierre %}
+                        <a href="{{ url_for('dinero.reporte_periodo', fecha_inicio=(c.fecha_apertura | local('%Y-%m-%d')), fecha_fin=(c.fecha_cierre | local('%Y-%m-%d'))) }}" target="_blank"
+                           class="ml-2 text-gray-400 hover:text-petroleo" title="Reimprimir reporte del turno"><i class="fas fa-print"></i></a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-sm text-gray-500 text-center">Aún no hay turnos de caja.</p>
+    {% endif %}
+</div>
+{{ paginacion(pag) }}
+{% endblock %}

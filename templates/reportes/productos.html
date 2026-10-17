@@ -1,0 +1,56 @@
+{% extends 'layout.html' %}
+{% from 'reportes/_comun.html' import tabs, filtros with context %}
+{% block title %}Reporte de productos y servicios{% endblock %}
+
+{% block content %}
+<h2 class="text-3xl font-bold text-petroleo mb-5">Reportes</h2>
+{{ tabs('productos') }}
+{{ filtros(endpoint, desde, hasta, hoy_iso, hasta_menos_semana, inicio_mes_iso, extra={'orden': orden}) }}
+
+<div class="no-print flex gap-2 mb-4 text-sm">
+    <span class="text-gray-500 self-center">Ordenar por:</span>
+    {% for clave, etiqueta in [('unidades', 'Unidades'), ('ingreso', 'Ingreso'), ('utilidad', 'Utilidad')] %}
+    <a href="{{ url_for('dinero.reporte_productos', desde=desde.isoformat(), hasta=hasta.isoformat(), orden=clave) }}"
+       class="px-3 py-1 rounded-full border text-xs {{ 'bg-brand-600 text-white border-brand-600' if orden == clave else 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' }}">{{ etiqueta }}</a>
+    {% endfor %}
+</div>
+
+<div class="grid grid-cols-2 gap-4 mb-6 max-w-lg">
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Ingreso total</p><p class="num text-xl font-semibold mt-1">{{ total_ingreso | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Utilidad total (aprox.)</p><p class="num text-xl font-semibold mt-1">{{ total_utilidad | q }}</p></div>
+</div>
+
+<section class="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-gray-500 text-xs uppercase">
+                <tr class="border-b border-gray-100">
+                    <th class="text-left px-5 py-2.5">Artículo</th><th class="text-right px-4 py-2.5">Unidades</th><th class="text-right px-4 py-2.5">Ingreso</th>
+                    <th class="text-right px-4 py-2.5">Costo</th><th class="text-right px-4 py-2.5">Utilidad</th><th class="text-right px-4 py-2.5">Margen</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for a in articulos %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-5 py-2.5 text-gray-800">{{ a.nombre }} <span class="text-xs text-gray-400">· {{ a.tipo }}</span></td>
+                    <td class="px-4 py-2.5 text-right num">{{ a.unidades }}</td>
+                    <td class="px-4 py-2.5 text-right num">{{ a.ingreso | q }}</td>
+                    <td class="px-4 py-2.5 text-right num text-gray-500">{{ a.costo | q }}</td>
+                    <td class="px-4 py-2.5 text-right num font-medium {{ 'text-red-600' if a.utilidad < 0 }}">{{ a.utilidad | q }}</td>
+                    <td class="px-4 py-2.5 text-right num text-gray-500">{{ ('%.0f%%' | format(a.margen)) if a.margen is not none else '—' }}</td>
+                </tr>
+                {% else %}<tr><td colspan="6" class="px-5 py-8 text-center text-gray-500">No hubo ventas en este periodo.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+{% if sin_ventas %}
+<details class="no-print bg-white border border-gray-200 rounded-2xl">
+    <summary class="cursor-pointer px-5 py-4 text-sm font-semibold text-ink-900">Sin ventas en el periodo ({{ sin_ventas | length }})</summary>
+    <ul class="px-5 pb-4 columns-1 md:columns-2 xl:columns-3 text-sm text-gray-600">
+        {% for p in sin_ventas %}<li class="break-inside-avoid py-0.5">{{ p.nombre }} <span class="text-xs text-gray-400">· {{ p.tipo }}{% if p.tipo == 'Producto' %} · {{ p.cantidad or 0 }} en stock{% endif %}</span></li>{% endfor %}
+    </ul>
+</details>
+{% endif %}
+{% endblock %}

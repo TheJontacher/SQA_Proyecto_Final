@@ -1,0 +1,30 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver %}
+{% block title %}Editar gasto #{{ gasto.id }}{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.gastos_lista'), 'Volver a gastos') }}
+<h2 class="text-3xl font-bold text-petroleo mb-1">Editar gasto #{{ gasto.id }}</h2>
+<p class="text-gray-500 mb-6">{{ gasto.monto | q }} · el monto y la forma de pago no se editan porque ya movieron dinero. Si se registró mal, anula el gasto y registra otro.</p>
+
+<form method="POST" class="max-w-xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div>
+        <label for="id_categoria" class="block text-sm text-gray-600 mb-1">Categoría *</label>
+        <select id="id_categoria" name="id_categoria" required class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+            {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if c.id == gasto.id_categoria }}>{{ c.nombre }} ({{ c.clasificacion }})</option>{% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="descripcion" class="block text-sm text-gray-600 mb-1">Descripción *</label>
+        <input id="descripcion" type="text" name="descripcion" required minlength="3" maxlength="250" value="{{ gasto.descripcion }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div>
+        <label for="fecha_gasto" class="block text-sm text-gray-600 mb-1">Fecha *</label>
+        <input id="fecha_gasto" type="date" name="fecha_gasto" required max="{{ hoy }}" value="{{ gasto.fecha_gasto }}" class="input-custom w-full sm:w-56 rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div class="flex gap-3">
+        <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar</button>
+        <a href="{{ url_for('dinero.gastos_lista') }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

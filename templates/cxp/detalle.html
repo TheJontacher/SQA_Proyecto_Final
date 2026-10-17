@@ -1,0 +1,102 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver, estado_cuenta %}
+{% block title %}Cuenta por pagar #{{ cuenta.id }}{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.cxp_lista'), 'Volver a cuentas por pagar') }}
+
+<div class="max-w-5xl grid lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1 space-y-6">
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h2 class="text-xl font-bold text-petroleo mb-3">Cuenta #{{ cuenta.id }}</h2>
+            <p class="text-xs text-gray-500">Proveedor</p>
+            <p class="font-medium text-gray-900 mb-3">{{ cuenta.proveedor or '—' }}</p>
+            <p class="text-xs text-gray-500">Descripción</p>
+            <p class="text-gray-800 mb-3 break-words">{{ cuenta.descripcion }}</p>
+            <p class="text-xs text-gray-500">Monto original</p>
+            <p class="text-gray-800 mb-3 num">{{ cuenta.monto | q }}</p>
+            <p class="text-xs text-gray-500">Saldo pendiente</p>
+            <p class="text-2xl font-semibold text-gray-900 mb-3 num">{{ cuenta.saldo_pendiente | q }}</p>
+            {{ estado_cuenta(cuenta.estado) }}
+            {% if cuenta.fecha_emision %}<p class="text-xs text-gray-500 mt-3">Emitida: {{ cuenta.fecha_emision }}</p>{% endif %}
+            {% if cuenta.fecha_vencimiento %}<p class="text-xs text-gray-500 mt-1">Vence: {{ cuenta.fecha_vencimiento }}</p>{% endif %}
+            {% if cuenta.fecha_pago and cuenta.estado == 'Pagada' %}<p class="text-xs text-gray-500 mt-1">Pagada: {{ cuenta.fecha_pago }}</p>{% endif %}
+            {% if cuenta.comprobante_ruta %}<p class="text-xs mt-2"><a href="{{ url_for('uploaded_expense_file', filename=cuenta.comprobante_ruta) }}" target="_blank" class="text-petroleo underline"><i class="fas fa-paperclip mr-1"></i>Ver comprobante</a></p>{% endif %}
+            {% if cuenta.estado == 'Anulada' and cuenta.motivo_anulacion %}<p class="text-xs text-red-600 mt-2">Anulada: {{ cuenta.motivo_anulacion }}</p>{% endif %}
+
+            {% if cuenta.estado in ('Pendiente', 'Parcial') %}
+            <div class="flex gap-2 mt-4">
+                <a href="{{ url_for('dinero.cxp_editar', id_cuenta=cuenta.id) }}" class="text-xs text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Editar</a>
+                {% if not pagos and not cuenta.id_gasto %}
+                <details class="relative">
+                    <summary class="text-xs text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg cursor-pointer list-none">Anular cuenta</summary>
+                    <form method="POST" action="{{ url_for('dinero.cxp_anular', id_cuenta=cuenta.id) }}" class="absolute left-0 z-10 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2">
+                        <label for="cxp-motivo" class="block text-xs font-medium text-gray-600">Motivo de la anulación *</label>
+                        <input id="cxp-motivo" type="text" name="motivo" required minlength="5" maxlength="250" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                        <button class="w-full bg-red-600 text-white text-xs font-semibold py-2 rounded-lg hover:bg-red-700">Anular cuenta</button>
+                    </form>
+                </details>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if cuenta.estado in ('Pendiente', 'Parcial') %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Registrar pago</h3>
+            <form method="POST" action="{{ url_for('dinero.cxp_pagar', id_cuenta=cuenta.id) }}" enctype="multipart/form-data" class="space-y-3">
+                <div>
+                    <label for="pago-monto" class="block text-xs text-gray-500 mb-1">Monto (Q)</label>
+                    <input id="pago-monto" type="number" name="monto" min="0.01" max="{{ cuenta.saldo_pendiente }}" step="0.01" value="{{ '%.2f' | format(cuenta.saldo_pendiente) }}" required class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <fieldset>
+                    <legend class="text-xs text-gray-500 mb-1">¿De dónde sale el dinero?</legend>
+                    <div class="space-y-2">
+                        {% for clave, nombre in formas.items() %}
+                        <label class="cursor-pointer block">
+                            <input type="radio" name="forma_pago" value="{{ clave }}" class="sr-only peer" required {{ 'disabled' if clave == 'efectivo' and not caja_abierta }}>
+                            <span class="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white peer-checked:border-brand-600 peer-checked:ring-1 peer-checked:ring-brand-600 peer-checked:bg-brand-50 peer-disabled:opacity-50">
+                                <span class="text-ink-900">{{ nombre }}</span>
+                                <span class="num text-xs text-gray-500">{% if clave == 'efectivo' and not caja_abierta %}Caja cerrada{% else %}{{ saldos[clave] | q }}{% endif %}</span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                <div>
+                    <label for="pago-ref" class="block text-xs text-gray-500 mb-1">Referencia (cheque, transferencia…)</label>
+                    <input id="pago-ref" type="text" name="referencia_pago" maxlength="100" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="pago-comprobante" class="block text-xs text-gray-500 mb-1">Comprobante (opcional)</label>
+                    <input id="pago-comprobante" type="file" name="comprobante" accept=".pdf,image/*" class="w-full text-xs text-gray-500">
+                </div>
+                <button type="submit" class="btn-primary w-full text-sm font-bold py-2.5 rounded-lg">Registrar pago</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden self-start">
+        <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-medium text-gray-700">Historial de pagos</h3></div>
+        {% if pagos %}
+        <div class="divide-y divide-gray-100">
+            {% for p in pagos %}
+            <div class="flex items-center justify-between px-5 py-3 text-sm">
+                <div>
+                    <p class="text-gray-800">{{ p.metodo_pago }}{% if p.referencia_pago %} <span class="text-xs text-gray-500 num">· Ref. {{ p.referencia_pago }}</span>{% endif %}</p>
+                    <p class="text-xs text-gray-500">{{ p.fecha_pago | local }}{% if p.usuario %} · {{ p.usuario }}{% endif %}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-semibold text-red-600 num">−{{ p.monto | q }}</p>
+                    {% if p.saldo_actual_snapshot is not none %}<p class="text-xs text-gray-400 num">saldo {{ p.saldo_actual_snapshot | q }}</p>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="px-5 py-10 text-sm text-gray-500 text-center">{{ 'Esta cuenta se saldó antes de que el sistema registrara cada pago.' if cuenta.estado == 'Pagada' else 'Aún no hay pagos registrados.' }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

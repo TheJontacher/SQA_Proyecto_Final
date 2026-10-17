@@ -128,6 +128,7 @@
 </div>
 
 <form method="POST" id="ventaForm" action="{{ url_for('venta_nueva') }}" class="h-full">
+    <input type="hidden" name="token" value="{{ token }}">
     <div class="flex flex-col lg:flex-row gap-6 items-start">
         <div class="w-full lg:w-2/3 flex flex-col gap-4">
             <div class="pos-card p-4 relative z-20">
@@ -214,23 +215,20 @@
                 <div class="mb-4">
                     <label class="block text-gray-700 font-bold mb-2 text-sm uppercase">Método de Pago</label>
                     <select id="metodo_pago" name="metodo_pago" class="input-custom w-full px-3 py-3 rounded-md bg-white" required>
-                        <option value="Efectivo" selected>Efectivo</option>
-                        <option value="Tarjeta">Tarjeta (Crédito/Débito)</option>
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Deposito">Depósito</option>
-                        <option value="Crédito">Crédito / Fiado</option>
+                        {% for m in metodos %}
+                        <option value="{{ m }}" {{ 'selected' if loop.first }}>{{ {'Tarjeta': 'Tarjeta (Crédito/Débito)', 'Deposito': 'Depósito', 'Crédito': 'Crédito / Fiado'}.get(m, m) }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div id="campo-referencia" class="hidden mb-4">
-                    <label class="block text-gray-700 font-bold mb-2 text-sm">No. Referencia</label>
-                    <input type="text" id="referencia_pago" name="referencia_pago" class="input-custom w-full px-3 py-2 rounded-md">
+                    <label for="referencia_pago" class="block text-gray-700 font-bold mb-2 text-sm">No. de autorización o boleta <span class="text-red-500">*</span></label>
+                    <input type="text" id="referencia_pago" name="referencia_pago" maxlength="100" class="input-custom w-full px-3 py-2 rounded-md">
                 </div>
 
                 {% if not caja_abierta %}
                     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-4 text-xs" role="alert">
                         <p class="font-bold">Caja Cerrada</p>
-                        <p>Abre la caja en el panel de ventas para facturar.</p>
+                        <p>Abre la caja en <a href="{{ url_for('dinero.caja') }}" class="underline font-bold">Caja</a> para poder vender.</p>
                     </div>
                 {% endif %}
 
@@ -270,7 +268,7 @@
         const idPaciente = document.getElementById('id_paciente').value;
         if (!idPaciente) return alert('Seleccione un paciente.');
         if (Object.keys(cart).length === 0) return alert('Carrito vacío.');
-        const pacienteNom = document.getElementById('paciente_search') ? document.getElementById('paciente_search').value : "{{ cita_data.nombre if cita_data else '' }} {{ cita_data.apellido if cita_data else '' }}";
+        const pacienteNom = document.getElementById('paciente_search') ? document.getElementById('paciente_search').value : {{ ((cita_data.nombre ~ ' ' ~ cita_data.apellido) if cita_data else '') | tojson }};
         document.getElementById('confirm-paciente').textContent = pacienteNom;
         document.getElementById('confirm-metodo').textContent = document.getElementById('metodo_pago').value;
         document.getElementById('confirm-total').textContent = document.getElementById('total-venta').textContent;
@@ -300,7 +298,7 @@
                     data.forEach(p => {
                         const d = document.createElement('div');
                         d.className = 'search-result-item';
-                        d.innerHTML = `<span>${escapeHtml(p.nombre)} ${escapeHtml(p.apellido)}</span>`;
+                        d.innerHTML = `<span>${esc(p.nombre)} ${esc(p.apellido)}</span>`;
                         d.onclick = () => {
                             patientSearchInput.value = `${p.nombre} ${p.apellido}`;
                             patientIdInput.value = p.id;
@@ -320,7 +318,7 @@
     inventorySearchInput.addEventListener('input', function() {
         const q = this.value;
         if (q.length < 1) return inventoryResults.classList.add('hidden');
-        fetch(`/api/inventario/buscar?q=${encodeURIComponent(q)}`)
+        fetch(`/api/inventario/buscar?limite=40&q=${encodeURIComponent(q)}`)
             .then(r => r.json()).then(items => {
                 inventoryResults.innerHTML = '';
                 items.forEach(item => {
@@ -343,7 +341,7 @@
                     if (item.tipo === 'Producto' && item.fecha_vencimiento) {
                         const estiloVence = item.por_vencer ? 'tag-vence-alert' : 'tag-vence';
                         const prefijo = item.por_vencer ? '⚠️ Vence: ' : 'Vence: ';
-                        expiryTag = `<span class="tag-pos ${estiloVence}">${prefijo}${item.fecha_vencimiento}</span>`;
+                        expiryTag = `<span class="tag-pos ${estiloVence}">${prefijo}${esc(item.fecha_vencimiento)}</span>`;
                     }
 
                     // ETIQUETA DE STOCK (Cantidad disponible)
@@ -356,7 +354,7 @@
 
                     d.innerHTML = `
                         <div class="flex flex-col gap-1">
-                            <span class="item-nombre">${escapeHtml(item.nombre)}</span>
+                            <span class="item-nombre">${esc(item.nombre)}</span>
                             <div class="flex gap-2 flex-wrap">
                                 ${stockTag}
                                 ${costTag}
@@ -400,19 +398,19 @@
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="p-4">
-                    <span class="block font-medium">${escapeHtml(item.nombre)}</span>
+                    <span class="block font-medium">${esc(item.nombre)}</span>
                     <input type="hidden" name="item_ids[]" value="${item.id}">
                 </td>
                 <td class="p-4 text-center">
-                    <input type="number" name="quantities[]" value="${item.cantidad}"
+                    <input type="number" name="quantities[]" min="1" step="1" value="${item.cantidad}"
                            class="w-16 border rounded text-center py-1"
                            onchange="validarYActualizarCantidad(${item.id}, this.value)">
                 </td>
                 <td class="p-4 text-right font-mono">Q${item.precio.toFixed(2)}</td>
                 <td class="p-4 text-right">
-                    <input type="number" name="discounts[]" value="${item.descuento}"
+                    <input type="number" name="discounts[]" min="0" step="0.01" value="${item.descuento}"
                            class="w-16 border rounded text-right py-1"
-                           onchange="cart[${item.id}].descuento=this.value;renderCart()">
+                           onchange="cart[${item.id}].descuento=Math.min(Math.max(parseFloat(this.value)||0,0),cart[${item.id}].precio);renderCart()">
                 </td>
                 <td class="p-4 text-right font-bold font-mono">Q${st.toFixed(2)}</td>
                 <td class="p-4 text-center text-red-500">
@@ -449,7 +447,9 @@
     document.getElementById('descuento_general').oninput = renderCart;
     document.getElementById('metodo_pago').onchange = function() {
         const campoRef = document.getElementById('campo-referencia');
-        campoRef.classList.toggle('hidden', ['Efectivo', 'Crédito'].includes(this.value));
+        const sinReferencia = ['Efectivo', 'Crédito'].includes(this.value);
+        campoRef.classList.toggle('hidden', sinReferencia);
+        document.getElementById('referencia_pago').required = !sinReferencia;
     };
 
     document.addEventListener('click', function(e) {

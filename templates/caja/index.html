@@ -1,0 +1,166 @@
+{% extends 'layout.html' %}
+{% from 'caja/_movimientos.html' import tabla_movimientos %}
+{% block title %}Caja{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+    <div>
+        <h2 class="text-3xl font-bold text-petroleo">Caja</h2>
+        <p class="text-sm text-gray-500 mt-1">Turno #{{ turno.id }} abierto desde {{ turno.fecha_apertura | local }}{% if abrio %} por {{ abrio }}{% endif %}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('venta_nueva') }}" class="btn-primary px-5 py-2.5 rounded-md font-bold text-sm"><i class="fas fa-cash-register mr-2"></i>Nueva venta</a>
+        <a href="{{ url_for('dinero.caja_historial') }}" class="bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-md text-sm hover:bg-gray-50">Historial de turnos</a>
+    </div>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div class="bg-white border border-gray-200 rounded-2xl p-5 min-w-0">
+        <p class="text-xs text-gray-500">Monto inicial</p>
+        <p class="num text-2xl font-semibold text-gray-900 mt-1 truncate">{{ turno.monto_inicial | q }}</p>
+        <p class="text-xs text-gray-500 mt-0.5">con lo que abrió el turno</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5 min-w-0">
+        <p class="text-xs text-gray-500">+ Entró en efectivo</p>
+        <p class="num text-2xl font-semibold text-brand-700 mt-1 truncate">{{ entradas | q }}</p>
+        <p class="text-xs text-gray-500 mt-0.5">ventas y cobros</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5 min-w-0">
+        <p class="text-xs text-gray-500">− Salió en efectivo</p>
+        <p class="num text-2xl font-semibold {{ 'text-red-600' if salidas > 0 else 'text-gray-900' }} mt-1 truncate">{{ salidas | q }}</p>
+        <p class="text-xs text-gray-500 mt-0.5">pagos, gastos y devoluciones</p>
+    </div>
+    <div class="bg-brand-700 text-white rounded-2xl p-5 min-w-0">
+        <p class="text-xs text-brand-100">= Efectivo esperado ahora</p>
+        <p class="num text-2xl font-semibold mt-1 truncate">{{ esperado | q }}</p>
+        <p class="text-xs text-brand-100 mt-0.5">inicial + entró − salió</p>
+    </div>
+</div>
+
+<div class="mb-6 bg-white border border-gray-200 rounded-2xl px-5 py-4">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Cobrado en este turno, por medio de pago</p>
+    <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+        {% for clave, nombre, nota in [('efectivo', 'Efectivo', 'entra a la caja'), ('tarjeta', 'Tarjeta', 'por consolidar'), ('banco', 'Transferencia / depósito', 'va al fondo'), ('credito', 'A crédito', 'queda por cobrar')] %}
+        <div class="min-w-0">
+            <dt class="text-gray-500">{{ nombre }}</dt>
+            <dd class="num font-semibold text-ink-900 truncate">{{ por_medio.get(clave, 0) | q }}</dd>
+            <dd class="text-xs text-gray-500">{{ nota }}</dd>
+        </div>
+        {% endfor %}
+    </dl>
+    {% if current_user.rol == 'admin' %}
+    <div class="mt-4 pt-4 border-t border-gray-100">
+        <p class="text-sm font-semibold text-ink-900 mb-2">Fuera de la caja ahora</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a href="{{ url_for('dinero.fondo') }}" class="block min-w-0 rounded-xl bg-brand-50 border border-brand-100 hover:border-brand-600 px-4 py-3 transition-colors">
+                <span class="block text-sm font-medium text-brand-800">Fondo</span>
+                <span class="num block text-2xl font-bold text-ink-900 truncate">{{ saldos.fondo | q }}</span>
+            </a>
+            <a href="{{ url_for('dinero.fondo', cuenta='por_consolidar') }}" class="block min-w-0 rounded-xl bg-amber-50 border border-amber-200 hover:border-amber-500 px-4 py-3 transition-colors">
+                <span class="block text-sm font-medium text-amber-900">Por consolidar</span>
+                <span class="num block text-2xl font-bold text-ink-900 truncate">{{ saldos.por_consolidar | q }}</span>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="grid lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100">
+            <h3 class="text-sm font-medium text-gray-700">Movimientos de este turno <span class="text-xs font-normal text-gray-500">({{ n_movimientos }})</span></h3>
+        </div>
+        {{ tabla_movimientos(movimientos, naturalezas_ingreso, naturalezas_egreso) }}
+    </div>
+
+    <div class="space-y-6">
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h3 class="text-sm font-semibold text-ink-900">Entrada o salida de efectivo</h3>
+            <p class="text-xs text-gray-500 mt-0.5 mb-4">Para dinero que no es una venta ni un pago registrado. Debe quedar explicado.</p>
+            <form method="POST" action="{{ url_for('dinero.caja_movimiento') }}" class="space-y-3" id="form-caja-mov">
+                <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de movimiento">
+                    <label><input type="radio" name="tipo" value="ingreso" class="sr-only peer" checked onchange="cargarNaturalezasCaja()">
+                        <span class="block text-center text-sm py-2 rounded-lg border border-gray-200 bg-white text-gray-600 cursor-pointer peer-checked:bg-brand-600 peer-checked:text-white peer-checked:border-brand-600">Entra efectivo</span></label>
+                    <label><input type="radio" name="tipo" value="egreso" class="sr-only peer" onchange="cargarNaturalezasCaja()">
+                        <span class="block text-center text-sm py-2 rounded-lg border border-gray-200 bg-white text-gray-600 cursor-pointer peer-checked:bg-brand-600 peer-checked:text-white peer-checked:border-brand-600">Sale efectivo</span></label>
+                </div>
+                <div>
+                    <label for="cm-monto" class="block text-xs font-medium text-gray-600 mb-1">Monto (Q)</label>
+                    <input id="cm-monto" type="number" name="monto" min="0.01" step="0.01" required inputmode="decimal" autocomplete="off" class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="cm-nat" class="block text-xs font-medium text-gray-600 mb-1">Naturaleza</label>
+                    <select id="cm-nat" name="naturaleza" required class="input-custom w-full bg-white rounded-lg px-3 py-2 text-sm"></select>
+                </div>
+                <div>
+                    <label for="cm-concepto" class="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+                    <input id="cm-concepto" type="text" name="concepto" required minlength="3" maxlength="250" autocomplete="off" placeholder="Ej. Cambio dejado por la doctora…"
+                           class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <button class="btn-primary w-full text-sm font-semibold py-2.5 rounded-lg">Registrar</button>
+            </form>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-1">Cerrar caja</h3>
+            <p class="text-xs text-gray-500 mb-4">Ya viene el efectivo esperado. Si al contar es distinto, corrígelo.</p>
+            <form method="POST" action="{{ url_for('dinero.caja_cerrar') }}" id="form-cierre"
+                  onsubmit="return confirm('¿Cerrar el turno con Q' + (parseFloat(document.getElementById('cierre-monto').value) || 0).toFixed(2) + ' contados?');" class="space-y-3">
+                <div>
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label for="cierre-monto" class="block text-sm text-gray-500">Monto contado (Q)</label>
+                        <button type="button" id="cierre-usar-esperado" class="text-xs font-semibold text-brand-700 hover:underline">Usar total esperado</button>
+                    </div>
+                    <input id="cierre-monto" type="number" name="monto_contado" min="0" step="0.01" required inputmode="decimal"
+                           value="{{ '%.2f' | format(esperado) }}" data-esperado="{{ '%.2f' | format(esperado) }}"
+                           class="input-custom num w-full rounded-lg px-3 py-2.5 text-lg font-semibold">
+                    <p id="cierre-diferencia" class="text-xs mt-1.5 text-brand-700" aria-live="polite">Coincide con lo esperado ✓</p>
+                </div>
+                <div>
+                    <label for="cierre-notas" class="block text-sm text-gray-500 mb-1">Notas <span class="text-xs">(obligatorias si hay diferencia)</span></label>
+                    <textarea id="cierre-notas" name="notas" rows="2" maxlength="300" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm"></textarea>
+                </div>
+                <p class="text-xs text-gray-500">Al cerrar, el efectivo contado pasa al Fondo.</p>
+                <button type="submit" class="w-full bg-red-600 text-white text-sm font-semibold py-2.5 rounded-lg hover:bg-red-700 transition-colors">Cerrar turno</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const NAT_CAJA = {
+        ingreso: {{ naturalezas_ingreso | tojson }},
+        egreso: {{ naturalezas_egreso | tojson }},
+    };
+    function cargarNaturalezasCaja() {
+        const tipo = document.querySelector('#form-caja-mov input[name="tipo"]:checked').value;
+        const sel = document.getElementById('cm-nat');
+        sel.replaceChildren(new Option('Selecciona…', ''));
+        Object.entries(NAT_CAJA[tipo]).forEach(([k, v]) => { if (k !== 'saldo_inicial') sel.add(new Option(v, k)); });
+    }
+    cargarNaturalezasCaja();
+
+    // Cierre: muestra la diferencia contra lo esperado y pide notas solo si hay una.
+    (function () {
+        const monto = document.getElementById('cierre-monto');
+        const aviso = document.getElementById('cierre-diferencia');
+        const notas = document.getElementById('cierre-notas');
+        let esperado = Math.round(parseFloat(monto.dataset.esperado) * 100);
+        function actualizar() {
+            const valor = Math.round(parseFloat(monto.value) * 100);
+            if (isNaN(valor)) { aviso.textContent = ''; notas.required = false; return; }
+            const dif = valor - esperado;
+            const texto = (Math.abs(dif) / 100).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            notas.required = dif !== 0;
+            aviso.className = 'text-xs mt-1.5 ' + (dif === 0 ? 'text-brand-700' : 'text-amber-700');
+            aviso.textContent = dif === 0 ? 'Coincide con lo esperado ✓' : (dif > 0 ? 'Sobrante de Q' : 'Faltante de Q') + texto + ' — explícalo en las notas.';
+        }
+        monto.addEventListener('input', actualizar);
+        monto.addEventListener('focus', () => monto.select());
+        document.getElementById('cierre-usar-esperado').addEventListener('click', () => { monto.value = (esperado / 100).toFixed(2); actualizar(); });
+        actualizar();
+    })();
+</script>
+{% endblock %}

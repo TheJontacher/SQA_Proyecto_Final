@@ -1,0 +1,19 @@
+{% extends 'layout.html' %}
+{% block title %}Mi correo{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Mi correo de verificación</h2>
+    <p class="text-gray-500 mt-1">Cada vez que inicies sesión, después de tu contraseña te enviaremos un código de 6 dígitos a este correo.</p>
+</div>
+<form method="POST" class="max-w-md bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if actual %}<p class="text-sm text-gray-600">Correo actual: <strong>{{ actual }}</strong></p>{% else %}
+    <p class="text-sm text-amber-700">Aún no tienes un correo registrado.</p>{% endif %}
+    <div>
+        <label for="email" class="block text-sm text-gray-500 mb-1">{{ 'Correo nuevo' if actual else 'Tu correo' }}</label>
+        <input id="email" name="email" type="email" required autocomplete="email" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <p class="text-xs text-gray-500">Te enviaremos un código para confirmar que el correo es tuyo; solo entonces se guarda.</p>
+    <button type="submit" class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Enviar código</button>
+</form>
+{% endblock %}

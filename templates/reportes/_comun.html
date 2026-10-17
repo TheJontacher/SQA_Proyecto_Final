@@ -1,0 +1,43 @@
+{# Piezas comunes de todos los reportes: pestañas y filtro de fechas con exportar/imprimir. #}
+{% macro tabs(activo) %}
+<div class="no-print flex flex-wrap gap-2 mb-6" aria-label="Reportes">
+    {% for clave, etiqueta, endpoint, solo_admin in [
+        ('ventas', 'Ventas', 'dinero.reporte_ventas', False),
+        ('productos', 'Productos y servicios', 'dinero.reporte_productos', False),
+        ('inventario', 'Inventario', 'dinero.reporte_inventario', False),
+        ('financiero', 'Financiero', 'dinero.reporte_financiero', True),
+        ('libro', 'Libro de dinero', 'dinero.reporte_libro', True)
+    ] %}
+    {% if not solo_admin or current_user.rol == 'admin' %}
+    <a href="{{ url_for(endpoint) }}" {% if activo == clave %}aria-current="page"{% endif %}
+       class="text-sm font-medium px-4 py-2 rounded-full border transition-colors {{ 'bg-brand-600 text-white border-brand-600' if activo == clave else 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' }}">{{ etiqueta }}</a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro filtros(endpoint, desde, hasta, hoy_iso, hasta_menos_semana, inicio_mes_iso, extra={}, exportar=True) %}
+<form method="GET" class="no-print flex flex-wrap items-end gap-3 mb-6">
+    {% for k, v in extra.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <div>
+        <label for="f-desde" class="block text-xs text-gray-500 mb-1">Desde</label>
+        <input id="f-desde" type="date" name="desde" value="{{ desde.isoformat() }}" class="input-custom bg-white rounded-lg px-3 py-2 text-sm">
+    </div>
+    <div>
+        <label for="f-hasta" class="block text-xs text-gray-500 mb-1">Hasta</label>
+        <input id="f-hasta" type="date" name="hasta" value="{{ hasta.isoformat() }}" class="input-custom bg-white rounded-lg px-3 py-2 text-sm">
+    </div>
+    <button type="submit" class="border border-gray-200 bg-white rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Filtrar</button>
+
+    <div class="flex flex-wrap gap-2 sm:ml-auto items-center">
+        <a href="{{ url_for(endpoint, desde=hoy_iso, hasta=hoy_iso, **extra) }}" class="text-xs text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50">Hoy</a>
+        <a href="{{ url_for(endpoint, desde=hasta_menos_semana, hasta=hoy_iso, **extra) }}" class="text-xs text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50">7 días</a>
+        <a href="{{ url_for(endpoint, desde=inicio_mes_iso, hasta=hoy_iso, **extra) }}" class="text-xs text-gray-600 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50">Este mes</a>
+        {% if exportar %}
+        <a href="{{ url_for(endpoint, desde=desde.isoformat(), hasta=hasta.isoformat(), export='csv', **extra) }}"
+           class="text-xs font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 hover:bg-brand-100">Exportar a Excel (CSV)</a>
+        {% endif %}
+        <button type="button" onclick="window.print()" class="text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50">Imprimir</button>
+    </div>
+</form>
+{% endmacro %}

@@ -1,0 +1,84 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver %}
+{% block title %}Nuevo gasto{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.gastos_lista'), 'Volver a gastos') }}
+<h2 class="text-3xl font-bold text-petroleo mb-6">Nuevo gasto</h2>
+
+<form method="POST" class="max-w-2xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="id_categoria" class="block text-sm text-gray-600 mb-1">Categoría *</label>
+            <select id="id_categoria" name="id_categoria" required class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                <option value="">Selecciona…</option>
+                {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if form.get('id_categoria') == c.id | string }}>{{ c.nombre }} ({{ c.clasificacion }})</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="fecha_gasto" class="block text-sm text-gray-600 mb-1">Fecha *</label>
+            <input id="fecha_gasto" type="date" name="fecha_gasto" required max="{{ hoy }}" value="{{ form.get('fecha_gasto', hoy) }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div>
+        <label for="descripcion" class="block text-sm text-gray-600 mb-1">Descripción * <span class="text-xs text-gray-500">(qué se pagó y por qué)</span></label>
+        <input id="descripcion" type="text" name="descripcion" required minlength="3" maxlength="250" autocomplete="off" value="{{ form.get('descripcion', '') }}" placeholder="Ej. Recibo de luz de octubre…" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div>
+        <label for="monto" class="block text-sm text-gray-600 mb-1">Monto (Q) *</label>
+        <input id="monto" type="number" name="monto" required min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="{{ form.get('monto', '') }}" class="input-custom num w-full sm:w-48 rounded-lg px-3 py-2.5 text-sm">
+    </div>
+
+    <fieldset>
+        <legend class="text-sm text-gray-600 mb-2">¿De dónde sale el dinero? *</legend>
+        <div class="grid sm:grid-cols-2 gap-2">
+            {% for clave, nombre in formas.items() %}
+            <label class="cursor-pointer">
+                <input type="radio" name="forma_pago" value="{{ clave }}" class="sr-only peer" required {{ 'checked' if form.get('forma_pago') == clave }} onchange="alternarCredito()">
+                <span class="flex items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white peer-checked:border-brand-600 peer-checked:ring-1 peer-checked:ring-brand-600 peer-checked:bg-brand-50">
+                    <span class="text-ink-900">{{ nombre }}</span>
+                    {% if clave == 'efectivo' %}
+                    <span class="text-xs num {{ 'text-gray-500' if caja_abierta else 'text-amber-700' }}">{{ saldos.efectivo | q if caja_abierta else 'Caja cerrada' }}</span>
+                    {% elif clave == 'credito' %}
+                    <span class="text-xs text-gray-500">Genera cuenta por pagar</span>
+                    {% else %}
+                    <span class="text-xs num text-gray-500">{{ saldos[clave] | q }}</span>
+                    {% endif %}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+
+    <div id="bloque-credito" class="hidden grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="id_proveedor" class="block text-sm text-gray-600 mb-1">Proveedor al que se le debe *</label>
+            <select id="id_proveedor" name="id_proveedor" class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                <option value="">Selecciona…</option>
+                {% for p in proveedores %}<option value="{{ p.id }}" {{ 'selected' if form.get('id_proveedor') == p.id | string }}>{{ p.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="fecha_vencimiento" class="block text-sm text-gray-600 mb-1">Vence (opcional)</label>
+            <input id="fecha_vencimiento" type="date" name="fecha_vencimiento" value="{{ form.get('fecha_vencimiento', '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+
+    <div class="flex gap-3 pt-1">
+        <button type="submit" class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Registrar gasto</button>
+        <a href="{{ url_for('dinero.gastos_lista') }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function alternarCredito() {
+        const sel = document.querySelector('input[name="forma_pago"]:checked');
+        const credito = sel && sel.value === 'credito';
+        document.getElementById('bloque-credito').classList.toggle('hidden', !credito);
+        document.getElementById('id_proveedor').required = credito;
+    }
+    alternarCredito();
+</script>
+{% endblock %}

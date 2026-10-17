@@ -1,0 +1,34 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver, selector_paciente %}
+{% block title %}Nueva cuenta por cobrar{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.cxc_lista'), 'Volver a cuentas por cobrar') }}
+<h2 class="text-3xl font-bold text-petroleo mb-1">Nueva cuenta por cobrar</h2>
+<p class="text-gray-500 mb-6">Para un saldo que un paciente debe y que no viene de una venta a crédito (esas se crean solas al vender).</p>
+
+<form method="POST" class="max-w-xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Paciente *</label>
+        {{ selector_paciente() }}
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="monto" class="block text-sm text-gray-600 mb-1">Monto (Q) *</label>
+            <input id="monto" type="number" name="monto" min="0.01" step="0.01" required class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+        <div>
+            <label for="fecha_vencimiento" class="block text-sm text-gray-600 mb-1">Vence (opcional)</label>
+            <input id="fecha_vencimiento" type="date" name="fecha_vencimiento" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div>
+        <label for="notas" class="block text-sm text-gray-600 mb-1">Notas</label>
+        <input id="notas" type="text" name="notas" maxlength="300" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div class="flex gap-3">
+        <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Registrar cuenta</button>
+        <a href="{{ url_for('dinero.cxc_lista') }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

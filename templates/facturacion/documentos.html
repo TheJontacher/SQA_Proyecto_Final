@@ -1,0 +1,64 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import paginacion %}
+{% block title %}Facturación{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Facturación electrónica</h2>
+    <p class="text-gray-500 mt-1">Todas las facturas emitidas. Para facturar una venta, ábrela desde Ventas y usa “Emitir factura”.</p>
+</div>
+
+{% if config and config.activo %}
+<div class="mb-5 rounded-xl border border-brand-200 bg-brand-50 text-brand-800 px-4 py-3 text-sm">
+    <i class="fas fa-check-circle mr-1"></i> Facturación electrónica activa ({{ 'producción' if config.ambiente == 'production' else 'ambiente de prueba' }}).
+</div>
+{% else %}
+<div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+    La facturación electrónica aún no está activa, así que todavía no se pueden emitir facturas.
+    {% if current_user.rol == 'admin' %}<a href="{{ url_for('facturacion.configuracion') }}" class="underline font-semibold">Configurarla ahora</a>.{% else %}Pídele al administrador que la configure.{% endif %}
+</div>
+{% endif %}
+
+<form method="GET" class="flex gap-2 mb-5 max-w-md">
+    <input type="text" name="q" value="{{ busqueda }}" placeholder="Receptor, autorización o # de venta…" aria-label="Buscar" class="input-custom flex-1 rounded-lg px-3 py-2 text-sm">
+    <button type="submit" class="btn-primary rounded-lg px-4 py-2 text-sm font-bold">Buscar</button>
+</form>
+
+<div class="bg-white rounded-lg shadow-md content-card overflow-hidden">
+    {% if documentos %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="table-header text-xs uppercase">
+                <tr>
+                    <th class="text-left px-5 py-3">Venta</th><th class="text-left px-5 py-3">Fecha</th><th class="text-left px-5 py-3">Receptor</th>
+                    <th class="text-right px-5 py-3">Total</th><th class="text-left px-5 py-3">Autorización</th><th class="text-left px-5 py-3">Estado</th><th class="px-5 py-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for d in documentos %}
+                <tr class="hover:bg-gray-50 align-top">
+                    <td class="px-5 py-3 font-medium text-gray-800">#{{ d.id_venta }}</td>
+                    <td class="px-5 py-3 text-gray-500 whitespace-nowrap num">{{ d.creado_en | local }}</td>
+                    <td class="px-5 py-3 text-gray-600">{{ d.nombre_receptor or '—' }}<span class="block text-xs text-gray-400 num">{{ d.nit_receptor or '' }}</span></td>
+                    <td class="px-5 py-3 text-right text-gray-800 num">{{ d.total | q if d.total is not none else '—' }}</td>
+                    <td class="px-5 py-3 text-gray-500 font-mono text-xs break-all">{{ d.numero_autorizacion or '—' }}{% if d.serie %}<span class="block">Serie {{ d.serie }} · No. {{ d.numero }}</span>{% endif %}</td>
+                    <td class="px-5 py-3">
+                        <span class="text-xs font-medium px-2 py-0.5 rounded-full
+                            {% if d.estado == 'certificado' %}bg-brand-50 text-brand-700{% elif d.estado == 'anulado' %}bg-gray-100 text-gray-500{% elif d.estado in ('error', 'indeterminado') %}bg-red-50 text-red-600{% else %}bg-amber-50 text-amber-700{% endif %}">{{ d.estado | capitalize }}</span>
+                        {% if d.mensaje_error %}<p class="text-xs text-red-600 mt-1 max-w-[16rem] break-words">{{ d.mensaje_error }}</p>{% endif %}
+                    </td>
+                    <td class="px-5 py-3 text-right whitespace-nowrap">
+                        {% if d.xml_base64 %}<a href="{{ url_for('facturacion.descargar', id_factura=d.id, tipo='pdf') }}" class="text-xs text-petroleo underline mr-2">PDF</a><a href="{{ url_for('facturacion.descargar', id_factura=d.id, tipo='xml') }}" class="text-xs text-petroleo underline mr-2">XML</a>{% endif %}
+                        <a href="{{ url_for('venta_detalle', id_venta=d.id_venta) }}" class="text-xs text-gray-700 underline">Ver venta</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-sm text-gray-500 text-center">Aún no se ha emitido ningún documento.</p>
+    {% endif %}
+</div>
+{{ paginacion(pag) }}
+{% endblock %}

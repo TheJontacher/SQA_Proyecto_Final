@@ -1,0 +1,32 @@
+{% extends 'layout.html' %}
+{% block title %}Reportes{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Reportes</h2>
+    <p class="text-gray-500 mt-1">Estos reportes salen de los registros del sistema, sin servicios externos. Para una interpretación con recomendaciones, los administradores tienen «Reportes con IA».</p>
+</div>
+
+<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+    {% set tarjetas = [
+        ('dinero.reporte_ventas', 'fa-receipt', 'Ventas', 'Total vendido, ticket promedio, por vendedor, por método de pago y por día.', False),
+        ('dinero.reporte_productos', 'fa-box-open', 'Productos y servicios', 'Qué se vende más, cuánto deja cada artículo y qué no se movió.', False),
+        ('dinero.reporte_inventario', 'fa-boxes', 'Inventario', 'Existencias, valor al costo, stock bajo, agotados y por vencer.', False),
+        ('dinero.reporte_financiero', 'fa-chart-line', 'Financiero', 'Estado de resultados, punto de equilibrio, flujo de dinero y cuentas por cobrar y pagar.', True),
+        ('dinero.reporte_libro', 'fa-book', 'Libro de dinero', 'Cada entrada y salida de caja, fondo y por consolidar, con quién y por qué.', True),
+        ('dinero.caja_historial', 'fa-cash-register', 'Cierres de caja', 'Turnos anteriores con lo esperado, lo contado y la diferencia.', False),
+        ('dinero.reporte_periodo', 'fa-print', 'Ventas del periodo (imprimible)', 'Listado de ventas separado por efectivo, bancos y crédito, listo para imprimir.', False),
+    ] %}
+    {% for endpoint, icono, titulo, texto, solo_admin in tarjetas %}
+    {% if not solo_admin or current_user.rol == 'admin' %}
+    <a href="{{ url_for(endpoint) }}" class="block bg-white rounded-lg shadow-md content-card p-6 hover:shadow-lg transition">
+        <div class="flex items-center gap-3 mb-2">
+            <span class="w-10 h-10 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center"><i class="fas {{ icono }}"></i></span>
+            <h3 class="font-bold text-gray-800">{{ titulo }}</h3>
+        </div>
+        <p class="text-sm text-gray-500">{{ texto }}</p>
+    </a>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}

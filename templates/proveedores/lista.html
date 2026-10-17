@@ -1,0 +1,51 @@
+{% extends 'layout.html' %}
+{% block title %}Proveedores{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div>
+        <h2 class="text-3xl font-bold text-petroleo">Proveedores</h2>
+        <p class="text-gray-500 mt-1">A quién le compra la clínica. Cada factura por pagar y cada gasto a crédito se liga a un proveedor.</p>
+    </div>
+    <div class="flex gap-2">
+        <a href="{{ url_for('dinero.proveedores_lista', inactivos=0 if ver_inactivos else 1) }}" class="bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-md text-sm hover:bg-gray-50">{{ 'Ver activos' if ver_inactivos else 'Ver desactivados' }}</a>
+        <a href="{{ url_for('dinero.proveedor_nuevo') }}" class="btn-primary px-5 py-2.5 rounded-md font-bold"><i class="fas fa-plus mr-2"></i>Nuevo proveedor</a>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow-md content-card overflow-hidden">
+    {% if proveedores %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="table-header text-xs uppercase">
+                <tr>
+                    <th class="text-left px-5 py-3">Nombre</th>
+                    <th class="text-left px-5 py-3">NIT</th>
+                    <th class="text-left px-5 py-3">Teléfono</th>
+                    <th class="text-right px-5 py-3">Se le debe</th>
+                    <th class="px-5 py-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for p in proveedores %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-5 py-3 font-medium text-gray-800">{{ p.nombre }}</td>
+                    <td class="px-5 py-3 text-gray-500 num">{{ p.nit or '—' }}</td>
+                    <td class="px-5 py-3 text-gray-500">{{ p.telefono or '—' }}</td>
+                    <td class="px-5 py-3 text-right num {{ 'text-red-600 font-semibold' if p.debe > 0 else 'text-gray-400' }}">{{ p.debe | q }}</td>
+                    <td class="px-5 py-3 text-right whitespace-nowrap">
+                        <a href="{{ url_for('dinero.proveedor_editar', id_proveedor=p.id) }}" class="text-xs text-petroleo underline mr-3">Editar</a>
+                        <form method="POST" action="{{ url_for('dinero.proveedor_alternar', id_proveedor=p.id) }}" class="inline">
+                            <button class="text-xs {{ 'text-brand-700' if ver_inactivos else 'text-red-600' }} underline">{{ 'Activar' if ver_inactivos else 'Desactivar' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-10 text-sm text-gray-500 text-center">No hay proveedores {{ 'desactivados' if ver_inactivos else 'registrados' }}.</p>
+    {% endif %}
+</div>
+{% endblock %}

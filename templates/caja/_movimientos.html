@@ -1,0 +1,36 @@
+{# Tabla de movimientos de un turno (la usan Caja y el detalle de un turno). #}
+{% macro tabla_movimientos(movimientos, naturalezas_ingreso, naturalezas_egreso) %}
+<div class="overflow-x-auto">
+    <table class="w-full text-sm">
+        <thead class="text-gray-500 text-xs uppercase">
+            <tr class="border-b border-gray-100">
+                <th class="text-left px-3 py-2.5">Hora</th>
+                <th class="text-left px-3 py-2.5">Tipo</th>
+                <th class="text-left px-3 py-2.5">Concepto</th>
+                <th class="text-left px-3 py-2.5">Medio</th>
+                <th class="text-right px-3 py-2.5">Monto</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for m in movimientos %}
+            <tr class="hover:bg-gray-50 {{ 'opacity-60' if m.anulada }}">
+                <td class="px-3 py-3 text-gray-500 whitespace-nowrap num">{{ m.fecha | local('%H:%M') }}</td>
+                <td class="px-3 py-3 text-gray-600">{{ m.tipo | capitalize }}</td>
+                <td class="px-3 py-3 text-gray-700 min-w-[6rem] max-w-[16rem] break-words">{{ m.concepto }}{% if m.naturaleza %} <span class="text-xs text-gray-500">· {{ (naturalezas_ingreso if m.entrada else naturalezas_egreso).get(m.naturaleza, m.naturaleza) }}</span>{% endif %}{% if m.anulada %} <span class="text-xs font-medium text-red-600">· Cancelada</span>{% endif %}{% if m.usuario %} <span class="text-xs text-gray-400">· {{ m.usuario }}</span>{% endif %}</td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                    {% if m.afecta_efectivo %}
+                    <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">Efectivo</span>
+                    {% else %}
+                    <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600" title="No cambia el efectivo de la caja">{{ {'tarjeta': 'Tarjeta', 'banco': 'Transferencia / depósito', 'credito': 'Crédito', 'fondo': 'Fondo', 'por_consolidar': 'Por consolidar'}.get(m.medio, m.medio) }}</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-3 text-right num whitespace-nowrap {{ 'line-through' if m.anulada }} {{ ('text-brand-600' if m.entrada else 'text-red-600') if m.afecta_efectivo else 'text-gray-500' }}">
+                    {{ '+' if m.entrada else '−' }}Q{{ '{:,.2f}'.format(m.monto) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="px-5 py-3 border-t border-gray-100 text-xs text-gray-500">Los movimientos en gris (tarjeta, transferencia, crédito, fondo) quedan registrados aquí pero no cambian el efectivo esperado.</p>
+{% endmacro %}

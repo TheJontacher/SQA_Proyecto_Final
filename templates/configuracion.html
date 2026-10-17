@@ -1,0 +1,106 @@
+{% extends 'layout.html' %}
+{% block title %}Configuración{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Configuración</h2>
+    <p class="text-gray-500 mt-1">Inteligencia artificial para los reportes y correo saliente (verificación en 2 pasos y envío de reportes). Las claves se guardan cifradas y no se vuelven a mostrar.</p>
+</div>
+
+<div class="grid xl:grid-cols-2 gap-6 items-start">
+    <!-- IA -->
+    <section class="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8">
+        <h3 class="text-lg font-semibold text-ink-900 mb-1"><i class="fas fa-robot text-brand-700 mr-2"></i>Inteligencia artificial (OpenAI)</h3>
+        {% if ia and ia.token_cifrado %}
+        <p class="text-sm text-brand-700 mb-4"><i class="fas fa-check-circle mr-1"></i> Token guardado · modelo <strong>{{ ia.modelo }}</strong></p>
+        {% else %}
+        <p class="text-sm text-amber-700 mb-4">Aún no hay token. Sin él no se pueden generar reportes con IA.</p>
+        {% endif %}
+        {% set actual = ia.modelo if ia else 'gpt-4o-mini' %}
+        <form method="POST" action="{{ url_for('ia.configuracion_ia') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label for="modelo" class="block text-sm text-gray-500 mb-1">Modelo</label>
+                <select id="modelo" name="modelo" class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                    {% for m in modelos %}<option value="{{ m }}" {{ 'selected' if m == actual }}>{{ m }}</option>{% endfor %}
+                    {% if actual not in modelos %}<option value="{{ actual }}" selected>{{ actual }}</option>{% endif %}
+                </select>
+            </div>
+            <div>
+                <label for="modelo_otro" class="block text-sm text-gray-500 mb-1">¿Otro modelo? (opcional, tiene prioridad)</label>
+                <input id="modelo_otro" name="modelo_otro" type="text" autocomplete="off" placeholder="p. ej. gpt-4.1-nano" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <div>
+                <label for="token" class="block text-sm text-gray-500 mb-1">Token (API key) de OpenAI {{ '— déjalo vacío para conservar el actual' if ia and ia.token_cifrado }}</label>
+                <input id="token" name="token" type="password" autocomplete="new-password" placeholder="sk-..." class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <p class="text-xs text-gray-500">A OpenAI solo viajan totales y nombres de productos o servicios; nunca nombres de pacientes ni expedientes.</p>
+            <button type="submit" class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar IA</button>
+        </form>
+        {% if ia and ia.token_cifrado %}
+        <form method="POST" action="{{ url_for('ia.configuracion_ia_probar') }}" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="text-xs font-semibold underline text-petroleo">Probar conexión con OpenAI</button>
+        </form>
+        {% endif %}
+    </section>
+
+    <!-- CORREO -->
+    <section class="bg-white border border-gray-200 rounded-2xl p-6 sm:p-8">
+        <h3 class="text-lg font-semibold text-ink-900 mb-1"><i class="fas fa-envelope text-brand-700 mr-2"></i>Correo saliente (SMTP)</h3>
+        {% if correo and correo.probado_en %}
+        <p class="text-sm text-brand-700 mb-4"><i class="fas fa-check-circle mr-1"></i> Enviando desde <strong>{{ correo.usuario }}</strong> · verificación en 2 pasos <strong>activa</strong></p>
+        {% elif correo %}
+        <p class="text-sm text-amber-700 mb-4">Guardado, pero <strong>sin probar</strong>. Envía un correo de prueba: la verificación en 2 pasos se activa solo cuando salga bien, así una clave equivocada no bloquea a nadie.</p>
+        {% else %}
+        <p class="text-sm text-amber-700 mb-4">Sin configurar: mientras tanto el inicio de sesión no pide código por correo y no se pueden enviar reportes.</p>
+        {% endif %}
+        {% set c = correo %}
+        <form method="POST" action="{{ url_for('ia.configuracion_correo') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid sm:grid-cols-3 gap-4">
+                <div class="sm:col-span-2">
+                    <label for="servidor" class="block text-sm text-gray-500 mb-1">Servidor SMTP</label>
+                    <input id="servidor" name="servidor" type="text" required value="{{ c.servidor if c else 'smtp.gmail.com' }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+                </div>
+                <div>
+                    <label for="puerto" class="block text-sm text-gray-500 mb-1">Puerto</label>
+                    <input id="puerto" name="puerto" type="number" required min="1" max="65535" value="{{ c.puerto if c else 587 }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+                </div>
+            </div>
+            <div>
+                <label for="seguridad" class="block text-sm text-gray-500 mb-1">Seguridad</label>
+                <select id="seguridad" name="seguridad" class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                    <option value="starttls" {{ 'selected' if not c or c.seguridad == 'starttls' }}>STARTTLS (puerto 587)</option>
+                    <option value="ssl" {{ 'selected' if c and c.seguridad == 'ssl' }}>SSL/TLS (puerto 465)</option>
+                </select>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="usuario" class="block text-sm text-gray-500 mb-1">Correo de envío (usuario)</label>
+                    <input id="usuario" name="usuario" type="email" required autocomplete="off" value="{{ c.usuario if c else '' }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm text-gray-500 mb-1">Contraseña de aplicación {{ '(vacía = conservar)' if c }}</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+                </div>
+            </div>
+            <div>
+                <label for="remitente_nombre" class="block text-sm text-gray-500 mb-1">Nombre del remitente</label>
+                <input id="remitente_nombre" name="remitente_nombre" type="text" maxlength="80" value="{{ (c.remitente_nombre if c else '') or 'Clínica' }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <p class="text-xs text-gray-500">En Gmail se necesita la verificación en 2 pasos de Google y una “contraseña de aplicación” (16 letras). Los espacios se ignoran.</p>
+            <button type="submit" class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar correo</button>
+        </form>
+        {% if correo %}
+        <form method="POST" action="{{ url_for('ia.configuracion_correo_probar') }}" class="mt-4 flex flex-wrap items-end gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label for="destino" class="block text-xs text-gray-500 mb-1">Enviar correo de prueba a</label>
+                <input id="destino" name="destino" type="email" placeholder="(vacío = mi correo)" class="input-custom rounded-lg px-3 py-2 text-sm">
+            </div>
+            <button class="border border-gray-200 bg-white rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Enviar correo de prueba</button>
+        </form>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

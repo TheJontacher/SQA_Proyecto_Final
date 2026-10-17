@@ -1,0 +1,113 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import boton_nit %}
+{% block title %}Configuración de facturación{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-3xl font-bold text-petroleo">Facturación electrónica (FEL)</h2>
+    <p class="text-gray-500 mt-1">Datos fiscales de la clínica y credenciales de Digifact para emitir y anular facturas ante SAT. La contraseña se guarda cifrada.</p>
+</div>
+
+{% if config and config.activo %}
+<div class="mb-5 rounded-xl border border-brand-200 bg-brand-50 text-brand-800 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+    <span><i class="fas fa-check-circle mr-1"></i> Facturación electrónica activa ({{ 'producción' if config.ambiente == 'production' else 'ambiente de prueba' }}).</span>
+    <form method="POST" action="{{ url_for('facturacion.probar_conexion') }}"><button class="text-xs font-semibold underline">Probar conexión con Digifact</button></form>
+</div>
+{% elif config %}
+<div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+    <span>Configuración guardada pero inactiva. Completa la dirección fiscal y marca “Activar” para poder emitir facturas.</span>
+    <form method="POST" action="{{ url_for('facturacion.probar_conexion') }}"><button class="text-xs font-semibold underline">Probar conexión con Digifact</button></form>
+</div>
+{% else %}
+<div class="mb-5 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 px-4 py-3 text-sm">Aún no se ha configurado la facturación electrónica. Empieza en el ambiente de <strong>prueba</strong> y pasa a producción cuando una factura de prueba salga bien.</div>
+{% endif %}
+
+{% set c = config %}
+<form method="POST" class="max-w-2xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="ambiente" class="block text-sm text-gray-500 mb-1">Ambiente *</label>
+            <select id="ambiente" name="ambiente" class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                <option value="test" {{ 'selected' if not c or c.ambiente == 'test' }}>Prueba (test)</option>
+                <option value="production" {{ 'selected' if c and c.ambiente == 'production' }}>Producción</option>
+            </select>
+        </div>
+        <div>
+            <label for="nit-campo" class="block text-sm text-gray-500 mb-1">NIT de la clínica *</label>
+            <input id="nit-campo" type="text" name="nit" autocomplete="off" required value="{{ form.get('nit', c.nit if c else '') }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+            {{ boton_nit('nit-campo', 'razon-campo') }}
+        </div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="razon-campo" class="block text-sm text-gray-500 mb-1">Razón social (nombre fiscal) *</label>
+            <input id="razon-campo" type="text" name="razon_social" required value="{{ form.get('razon_social', c.razon_social if c else '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+        <div>
+            <label for="nombre_comercial" class="block text-sm text-gray-500 mb-1">Nombre comercial</label>
+            <input id="nombre_comercial" type="text" name="nombre_comercial" value="{{ form.get('nombre_comercial', (c.nombre_comercial if c else '') or '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="usuario_digifact" class="block text-sm text-gray-500 mb-1">Usuario Digifact *</label>
+            <input id="usuario_digifact" type="text" name="usuario_digifact" required autocomplete="off" value="{{ form.get('usuario_digifact', c.usuario_digifact if c else '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+        <div>
+            <label for="password_digifact" class="block text-sm text-gray-500 mb-1">Contraseña Digifact {{ '(déjala vacía para no cambiarla)' if c else '*' }}</label>
+            <input id="password_digifact" type="password" name="password_digifact" autocomplete="new-password" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div class="grid sm:grid-cols-3 gap-4">
+        <div>
+            <label for="afiliacion_iva" class="block text-sm text-gray-500 mb-1">Afiliación IVA</label>
+            <select id="afiliacion_iva" name="afiliacion_iva" class="input-custom w-full bg-white rounded-lg px-3 py-2.5 text-sm">
+                <option value="GEN" {{ 'selected' if not c or c.afiliacion_iva != 'PEQ' }}>GEN · Régimen general (IVA 12%)</option>
+                <option value="PEQ" {{ 'selected' if c and c.afiliacion_iva == 'PEQ' }}>PEQ · Pequeño contribuyente</option>
+            </select>
+        </div>
+        <div>
+            <label for="codigo_establecimiento" class="block text-sm text-gray-500 mb-1">Código de establecimiento</label>
+            <input id="codigo_establecimiento" type="number" name="codigo_establecimiento" min="1" max="9999" value="{{ form.get('codigo_establecimiento', c.codigo_establecimiento if c else 1) }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+            <label for="tipo_frase" class="block text-sm text-gray-500 mb-1">Tipo de frase</label>
+            <input id="tipo_frase" type="number" name="tipo_frase" min="1" value="{{ form.get('tipo_frase', (c.tipo_frase if c else None) or 1) }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+        <div>
+            <label for="escenario_frase" class="block text-sm text-gray-500 mb-1">Escenario de la frase</label>
+            <input id="escenario_frase" type="number" name="escenario_frase" min="1" value="{{ form.get('escenario_frase', (c.escenario_frase if c else None) or 1) }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+        </div>
+    </div>
+    <p class="text-xs text-gray-500">Régimen general (GEN): factura FACT con IVA incluido en el precio. Pequeño contribuyente (PEQ): factura FPEQ, con IVA en cero; exige la frase tipo 3 (al guardar con PEQ se ajusta a 3 / escenario 1). Si SAT te asignó una frase fiscal, indica también su escenario (por omisión 1/1: ISR sobre utilidades trimestrales). Confirma estos datos con tu contador.</p>
+
+    <div class="pt-2 border-t border-gray-100">
+        <p class="text-sm font-medium text-gray-700 mb-3">Dirección fiscal (obligatoria para activar)</p>
+        <div class="grid sm:grid-cols-2 gap-4">
+            <div class="sm:col-span-2">
+                <label for="direccion" class="block text-sm text-gray-500 mb-1">Dirección</label>
+                <input id="direccion" type="text" name="direccion" value="{{ form.get('direccion', (c.direccion if c else '') or '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <div>
+                <label for="codigo_postal" class="block text-sm text-gray-500 mb-1">Código postal (5 dígitos)</label>
+                <input id="codigo_postal" type="text" name="codigo_postal" inputmode="numeric" maxlength="5" value="{{ form.get('codigo_postal', (c.codigo_postal if c else '') or '') }}" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <div>
+                <label for="municipio" class="block text-sm text-gray-500 mb-1">Municipio</label>
+                <input id="municipio" type="text" name="municipio" value="{{ form.get('municipio', (c.municipio if c else '') or '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+            <div>
+                <label for="departamento" class="block text-sm text-gray-500 mb-1">Departamento</label>
+                <input id="departamento" type="text" name="departamento" value="{{ form.get('departamento', (c.departamento if c else '') or '') }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+            </div>
+        </div>
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-gray-600">
+        <input type="checkbox" name="activo" {{ 'checked' if c and c.activo }}> Activar facturación electrónica
+    </label>
+    <button type="submit" class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar configuración</button>
+</form>
+{% endblock %}

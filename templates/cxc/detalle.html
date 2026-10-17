@@ -1,0 +1,108 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver, estado_cuenta %}
+{% block title %}Cuenta por cobrar #{{ cuenta.id }}{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.cxc_lista'), 'Volver a cuentas por cobrar') }}
+
+<div class="max-w-5xl grid lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-1 space-y-6">
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h2 class="text-xl font-bold text-petroleo mb-3">Cuenta #{{ cuenta.id }}</h2>
+            <p class="text-xs text-gray-500">Paciente</p>
+            <p class="font-medium text-gray-900 mb-3">{{ cuenta.nombre }} {{ cuenta.apellido }}{% if cuenta.telefono %}<span class="block text-xs text-gray-400 font-normal">{{ cuenta.telefono }}</span>{% endif %}</p>
+            <p class="text-xs text-gray-500">Monto original</p>
+            <p class="text-gray-800 mb-3 num">{{ cuenta.monto | q }}</p>
+            <p class="text-xs text-gray-500">Saldo pendiente</p>
+            <p class="text-2xl font-semibold text-gray-900 mb-3 num">{{ cuenta.saldo_pendiente | q }}</p>
+            {{ estado_cuenta(cuenta.estado) }}
+            {% if cuenta.fecha_vencimiento %}<p class="text-xs text-gray-500 mt-3">Vence: {{ cuenta.fecha_vencimiento }}</p>{% endif %}
+            {% if cuenta.id_venta %}<p class="text-xs text-gray-500 mt-1">Origen: <a href="{{ url_for('venta_detalle', id_venta=cuenta.id_venta) }}" class="underline text-gray-600">Venta #{{ cuenta.id_venta }}</a></p>{% endif %}
+            {% if cuenta.notas %}<p class="text-xs text-gray-500 mt-1">{{ cuenta.notas }}</p>{% endif %}
+            {% if cuenta.estado == 'Anulada' and cuenta.motivo_anulacion %}<p class="text-xs text-red-600 mt-2">Anulada: {{ cuenta.motivo_anulacion }}</p>{% endif %}
+
+            {% if current_user.rol == 'admin' and cuenta.estado in ('Pendiente', 'Parcial') %}
+            <div class="flex gap-2 mt-4">
+                <a href="{{ url_for('dinero.cxc_editar', id_cuenta=cuenta.id) }}" class="text-xs text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Editar</a>
+                {% if not abonos and not cuenta.id_venta %}
+                <details class="relative">
+                    <summary class="text-xs text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg cursor-pointer list-none">Anular cuenta</summary>
+                    <form method="POST" action="{{ url_for('dinero.cxc_anular', id_cuenta=cuenta.id) }}" class="absolute left-0 z-10 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2">
+                        <label for="cxc-motivo" class="block text-xs font-medium text-gray-600">Motivo de la anulación *</label>
+                        <input id="cxc-motivo" type="text" name="motivo" required minlength="5" maxlength="250" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                        <button class="w-full bg-red-600 text-white text-xs font-semibold py-2 rounded-lg hover:bg-red-700">Anular cuenta</button>
+                    </form>
+                </details>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if cuenta.estado in ('Pendiente', 'Parcial') %}
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Registrar abono</h3>
+            <form method="POST" action="{{ url_for('dinero.cxc_pagar', id_cuenta=cuenta.id) }}" class="space-y-3">
+                <div>
+                    <label for="cobro-monto" class="block text-xs text-gray-500 mb-1">Monto (Q)</label>
+                    <input id="cobro-monto" type="number" name="monto" min="0.01" max="{{ cuenta.saldo_pendiente }}" step="0.01" required class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="cobro-metodo" class="block text-xs text-gray-500 mb-1">¿Cómo paga?</label>
+                    <select id="cobro-metodo" name="metodo_pago" required class="input-custom w-full bg-white rounded-lg px-3 py-2 text-sm">
+                        <option value="Efectivo">Efectivo (entra a la caja)</option>
+                        <option value="Tarjeta">Tarjeta (queda por consolidar)</option>
+                        <option value="Transferencia">Transferencia (entra al fondo)</option>
+                        <option value="Deposito">Depósito (entra al fondo)</option>
+                        <option value="Cheque">Cheque (entra al fondo)</option>
+                    </select>
+                    {% if not caja_abierta %}<p class="text-xs text-amber-700 mt-1">La caja está cerrada: el efectivo requiere abrirla.</p>{% endif %}
+                </div>
+                <div id="cobro-ref-campo" class="hidden">
+                    <label for="cobro-ref" class="block text-xs text-gray-500 mb-1">No. de autorización o boleta *</label>
+                    <input type="text" id="cobro-ref" name="referencia_pago" maxlength="100" disabled autocomplete="off" class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <button type="submit" class="btn-primary w-full text-sm font-bold py-2.5 rounded-lg">Registrar abono</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden self-start">
+        <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-medium text-gray-700">Historial de abonos</h3></div>
+        {% if abonos %}
+        <div class="divide-y divide-gray-100">
+            {% for a in abonos %}
+            <div class="flex items-center justify-between px-5 py-3 text-sm">
+                <div>
+                    <p class="text-gray-800">{{ a.metodo_pago | etiqueta_metodo }}{% if a.referencia_pago %} <span class="text-xs text-gray-500 num">· Ref. {{ a.referencia_pago }}</span>{% endif %}</p>
+                    <p class="text-xs text-gray-500">{{ a.fecha_abono | local }}{% if a.usuario %} · {{ a.usuario }}{% endif %}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-semibold text-brand-700 num">+{{ a.monto | q }}</p>
+                    {% if a.saldo_actual_snapshot is not none %}<p class="text-xs text-gray-400 num">saldo {{ a.saldo_actual_snapshot | q }}</p>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="px-5 py-10 text-sm text-gray-500 text-center">Aún no hay abonos registrados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const metodo = document.getElementById('cobro-metodo'), campo = document.getElementById('cobro-ref');
+        if (!metodo) return;
+        function actualizar() {
+            const pide = metodo.value !== 'Efectivo';
+            document.getElementById('cobro-ref-campo').classList.toggle('hidden', !pide);
+            campo.disabled = !pide; campo.required = pide;
+        }
+        metodo.addEventListener('change', actualizar);
+        actualizar();
+    })();
+</script>
+{% endblock %}

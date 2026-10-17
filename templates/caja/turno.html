@@ -1,0 +1,53 @@
+{% extends 'layout.html' %}
+{% from 'caja/_movimientos.html' import tabla_movimientos %}
+{% from '_macros.html' import volver %}
+{% block title %}Turno #{{ turno.id }}{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.caja_historial'), 'Volver al historial') }}
+
+<div class="mb-5">
+    <h2 class="text-3xl font-bold text-petroleo">Turno #{{ turno.id }}</h2>
+    <p class="text-sm text-gray-500 mt-1">
+        Abierto {{ turno.fecha_apertura | local }}{% if turno.abrio %} por {{ turno.abrio }}{% endif %}
+        {% if turno.fecha_cierre %} · cerrado {{ turno.fecha_cierre | local }}{% if turno.cerro %} por {{ turno.cerro }}{% endif %}{% else %} · <strong class="text-brand-600">sigue abierto</strong>{% endif %}
+    </p>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Monto inicial</p><p class="num text-xl font-semibold mt-1">{{ turno.monto_inicial | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Esperado al cierre</p><p class="num text-xl font-semibold mt-1">{{ turno.monto_final_calculado | q if turno.monto_final_calculado is not none else '—' }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Contado</p><p class="num text-xl font-semibold mt-1">{{ turno.monto_final_real | q if turno.monto_final_real is not none else '—' }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Diferencia</p>
+        <p class="num text-xl font-semibold mt-1 {{ 'text-red-600' if (turno.diferencia or 0) < 0 else ('text-blue-600' if (turno.diferencia or 0) > 0 else 'text-brand-700') }}">{{ turno.diferencia | q if turno.diferencia is not none else '—' }}</p></div>
+</div>
+{% if turno.notas %}<p class="mb-6 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-4 py-3"><strong>Notas del cierre:</strong> {{ turno.notas }}</p>{% endif %}
+
+<div class="grid lg:grid-cols-2 gap-6">
+    <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-medium text-gray-700">Ventas del turno ({{ ventas | length }})</h3></div>
+        {% if ventas %}
+        <div class="divide-y divide-gray-100">
+            {% for v in ventas %}
+            <a href="{{ url_for('venta_detalle', id_venta=v.id) }}" class="flex items-center justify-between px-5 py-3 text-sm hover:bg-gray-50 {{ 'opacity-60' if v.estado == 'Cancelada' }}">
+                <span>
+                    <span class="font-medium text-gray-800">#{{ v.id }} · {{ v.nombre }} {{ v.apellido }}</span>
+                    <span class="block text-xs text-gray-500">{{ v.fecha_venta | local }} · {{ v.metodo_pago | etiqueta_metodo }}{% if v.estado == 'Cancelada' %} · Cancelada{% endif %}</span>
+                </span>
+                <span class="num font-semibold {{ 'line-through' if v.estado == 'Cancelada' }}">{{ v.monto_total | q }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}<p class="px-5 py-8 text-sm text-gray-500 text-center">Sin ventas en este turno.</p>{% endif %}
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-medium text-gray-700">Movimientos de dinero</h3></div>
+        {% if tiene_libro %}
+        {{ tabla_movimientos(movimientos, naturalezas_ingreso, naturalezas_egreso) }}
+        {% else %}
+        <p class="px-5 py-8 text-sm text-gray-500 text-center">Este turno es anterior al registro detallado de movimientos de caja; solo se conservan sus totales y sus ventas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

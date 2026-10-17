@@ -1,0 +1,225 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import paginacion %}
+{% block title %}Fondo{% endblock %}
+
+{% block content %}
+<div class="mb-5">
+    <h2 class="text-3xl font-bold text-petroleo">Fondo y tesorería</h2>
+    <p class="text-gray-500 mt-1">El dinero de la clínica fuera de la caja: banco, bóveda y tarjeta pendiente de liquidar.</p>
+</div>
+
+{% if sin_movimientos %}
+<div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+    <strong>Primer paso:</strong> el Fondo empieza en cero. Registra con cuánto dinero cuenta hoy la clínica fuera de la caja (banco y bóveda)
+    como <em>Entra dinero → Saldo inicial</em>. Desde ahí, cada venta, cobro, pago y gasto lo irá moviendo.
+</div>
+{% endif %}
+
+{# ---------- Saldos ---------- #}
+<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+    <a href="{{ url_for('dinero.fondo', cuenta='fondo') }}" class="col-span-2 xl:col-span-1 rounded-2xl p-5 bg-brand-700 text-white hover:bg-brand-800 transition-colors">
+        <p class="text-xs text-brand-100">Fondo</p>
+        <p class="num text-2xl font-semibold tracking-tight mt-1">{{ resumen.fondo | q }}</p>
+        <p class="text-xs text-brand-100 mt-1">Dinero fuera de caja</p>
+    </a>
+    <a href="{{ url_for('dinero.fondo', cuenta='por_consolidar') }}" class="bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 transition-colors">
+        <p class="text-xs text-gray-500">Por consolidar</p>
+        <p class="num text-xl font-semibold tracking-tight text-ink-900 mt-1">{{ resumen.por_consolidar | q }}</p>
+        <p class="text-xs text-gray-500 mt-1">Tarjeta sin liquidar</p>
+    </a>
+    <a href="{{ url_for('dinero.caja') }}" class="bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 transition-colors">
+        <p class="text-xs text-gray-500">Caja</p>
+        <p class="num text-xl font-semibold tracking-tight text-ink-900 mt-1">{{ resumen.caja | q }}</p>
+        <p class="text-xs text-gray-500 mt-1">{{ 'Turno abierto' if resumen.caja_abierta else 'Cerrada' }}</p>
+    </a>
+    <a href="{{ url_for('dinero.cxc_lista') }}" class="bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 transition-colors">
+        <p class="text-xs text-gray-500">Por cobrar</p>
+        <p class="num text-xl font-semibold tracking-tight text-ink-900 mt-1">{{ resumen.por_cobrar | q }}</p>
+        <p class="text-xs text-gray-500 mt-1">Pacientes te deben</p>
+    </a>
+    <a href="{{ url_for('dinero.cxp_lista') }}" class="bg-white border border-gray-200 rounded-2xl p-5 hover:border-brand-500 transition-colors">
+        <p class="text-xs text-gray-500">Por pagar</p>
+        <p class="num text-xl font-semibold tracking-tight text-ink-900 mt-1">{{ resumen.por_pagar | q }}</p>
+        <p class="text-xs text-gray-500 mt-1">Debes a proveedores</p>
+    </a>
+    <div class="bg-ink-950 text-white rounded-2xl p-5">
+        <p class="text-xs text-gray-400">Posición neta</p>
+        <p class="num text-xl font-semibold tracking-tight mt-1">{{ resumen.neta | q }}</p>
+        <p class="text-xs text-gray-400 mt-1">Lo tuyo menos lo que debes</p>
+    </div>
+</div>
+
+{# ---------- Conciliación ---------- #}
+{% set problemas = conciliacion | rejectattr('ok') | list %}
+<details class="mb-6 bg-white border {{ 'border-amber-300' if problemas else 'border-gray-200' }} rounded-2xl" {{ 'open' if problemas }}>
+    <summary class="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3">
+        <span class="flex items-center gap-3">
+            {% if problemas %}
+            <span class="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-sm font-bold" aria-hidden="true">!</span>
+            <span class="text-sm font-semibold text-ink-900">Conciliación: {{ problemas | length }} revisión{{ 'es' if problemas | length != 1 }} con diferencias</span>
+            {% else %}
+            <span class="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <span class="text-sm font-semibold text-ink-900">Conciliación: el dinero cuadra</span>
+            {% endif %}
+        </span>
+        <span class="text-xs text-gray-500">Ver las {{ conciliacion | length }} revisiones</span>
+    </summary>
+    <ul class="px-5 pb-4 space-y-2 border-t border-gray-100 pt-3">
+        {% for r in conciliacion %}
+        <li class="text-sm">
+            <p class="flex items-start gap-2 {{ 'text-ink-900' if r.ok else 'text-amber-800 font-medium' }}">
+                <span aria-hidden="true">{{ '✓' if r.ok else '!' }}</span>
+                <span>{{ r.titulo }}{% if not r.ok %} <span class="num">({{ r.total }})</span>{% endif %}</span>
+            </p>
+            {% if not r.ok %}
+            <ul class="ml-6 mt-1 text-xs text-gray-600 list-disc list-inside space-y-0.5">
+                {% for d in r.detalles %}<li>{{ d }}</li>{% endfor %}
+                {% if r.total > r.detalles | length %}<li>… y {{ r.total - r.detalles | length }} más.</li>{% endif %}
+            </ul>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</details>
+
+<div class="grid xl:grid-cols-3 gap-6">
+
+    {# ---------- Libro ---------- #}
+    <section class="xl:col-span-2 min-w-0" aria-labelledby="ttl-libro">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div class="flex gap-2" role="tablist" aria-label="Cuenta">
+                {% for clave, nombre in cuentas.items() %}
+                <a href="{{ url_for('dinero.fondo', cuenta=clave, desde=desde, hasta=hasta) }}" role="tab" aria-selected="{{ 'true' if cuenta == clave else 'false' }}"
+                   class="text-sm font-medium px-4 py-2 rounded-full border {{ 'bg-brand-600 text-white border-brand-600' if cuenta == clave else 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' }}">{{ nombre }}</a>
+                {% endfor %}
+            </div>
+            <form method="GET" class="flex items-end gap-2 text-xs">
+                <input type="hidden" name="cuenta" value="{{ cuenta }}">
+                <label class="text-gray-500">Desde <input type="date" name="desde" value="{{ desde }}" class="input-custom block mt-0.5 bg-white rounded-lg px-2 py-1.5 text-sm"></label>
+                <label class="text-gray-500">Hasta <input type="date" name="hasta" value="{{ hasta }}" class="input-custom block mt-0.5 bg-white rounded-lg px-2 py-1.5 text-sm"></label>
+                <button class="border border-gray-200 bg-white rounded-lg px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Filtrar</button>
+            </form>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                <h2 id="ttl-libro" class="text-sm font-semibold text-ink-900">Libro de {{ cuentas[cuenta] }}</h2>
+                <p class="text-xs text-gray-500">
+                    Periodo: <span class="text-brand-700 num">+{{ entradas | q }}</span> · <span class="text-red-600 num">−{{ salidas | q }}</span> ·
+                    Saldo actual <span class="font-semibold text-ink-900 num">{{ saldo_cuenta_actual | q }}</span>
+                </p>
+            </div>
+            {% if filas %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-gray-500 text-xs uppercase">
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left px-4 py-2.5 font-medium">Fecha</th>
+                            <th class="text-left px-4 py-2.5 font-medium">Movimiento</th>
+                            <th class="text-right px-4 py-2.5 font-medium">Entrada</th>
+                            <th class="text-right px-4 py-2.5 font-medium">Salida</th>
+                            <th class="text-right px-4 py-2.5 font-medium">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        {% for fila in filas %}
+                        {% set m = fila.m %}
+                        <tr class="align-top">
+                            <td class="px-4 py-3 text-gray-500 whitespace-nowrap num">{{ m.creado_en | local('%d/%m/%Y') }}<span class="block text-xs">{{ m.creado_en | local('%H:%M') }}</span></td>
+                            <td class="px-4 py-3 min-w-[12rem]">
+                                <p class="text-ink-900">{{ etiquetas.get(m.tipo, m.tipo) }}{% if m.naturaleza %} <span class="text-xs text-gray-500">· {{ (naturalezas_ingreso if fila.es_entrada else naturalezas_egreso).get(m.naturaleza, m.naturaleza) }}</span>{% endif %}</p>
+                                <p class="text-xs text-gray-500 break-words">{{ m.concepto }} · {{ m.usuario or '—' }}</p>
+                            </td>
+                            <td class="px-4 py-3 text-right num text-brand-700">{{ ('+' ~ (fila.monto | q)) if fila.es_entrada else '' }}</td>
+                            <td class="px-4 py-3 text-right num text-red-600">{{ ('−' ~ (fila.monto | q)) if not fila.es_entrada else '' }}</td>
+                            <td class="px-4 py-3 text-right num font-medium text-ink-900">{{ fila.saldo | q }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="px-5 py-10 text-sm text-gray-500 text-center">No hay movimientos en este periodo.</p>
+            {% endif %}
+        </div>
+        {{ paginacion(pag) }}
+    </section>
+
+    {# ---------- Formularios ---------- #}
+    <aside class="space-y-6">
+        <section class="bg-white border border-gray-200 rounded-2xl p-5" aria-labelledby="ttl-mov">
+            <h2 id="ttl-mov" class="text-sm font-semibold text-ink-900">Registrar movimiento en {{ cuentas[cuenta] }}</h2>
+            <p class="text-xs text-gray-500 mt-0.5 mb-4">Solo para dinero que no viene de una venta ni de un pago ya registrado. Todo movimiento necesita concepto y naturaleza.</p>
+            <form method="POST" action="{{ url_for('dinero.fondo_movimiento') }}" class="space-y-3" id="form-mov">
+                <input type="hidden" name="cuenta" value="{{ cuenta }}">
+                <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de movimiento">
+                    <label><input type="radio" name="tipo" value="ingreso" class="sr-only peer" checked onchange="cargarNaturalezas()">
+                        <span class="block text-center text-sm py-2 rounded-lg border border-gray-200 bg-white text-gray-600 cursor-pointer peer-checked:bg-brand-600 peer-checked:text-white peer-checked:border-brand-600">Entra dinero</span></label>
+                    <label><input type="radio" name="tipo" value="egreso" class="sr-only peer" onchange="cargarNaturalezas()">
+                        <span class="block text-center text-sm py-2 rounded-lg border border-gray-200 bg-white text-gray-600 cursor-pointer peer-checked:bg-brand-600 peer-checked:text-white peer-checked:border-brand-600">Sale dinero</span></label>
+                </div>
+                <div>
+                    <label for="mov-monto" class="block text-xs font-medium text-gray-600 mb-1">Monto (Q)</label>
+                    <input id="mov-monto" type="number" name="monto" min="0.01" step="0.01" required inputmode="decimal" autocomplete="off" class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="mov-naturaleza" class="block text-xs font-medium text-gray-600 mb-1">Naturaleza</label>
+                    <select id="mov-naturaleza" name="naturaleza" required class="input-custom w-full bg-white rounded-lg px-3 py-2 text-sm"></select>
+                </div>
+                <div>
+                    <label for="mov-concepto" class="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+                    <input id="mov-concepto" type="text" name="concepto" required minlength="3" maxlength="250" autocomplete="off" placeholder="Ej. Saldo del banco al 1 de octubre…"
+                           class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <button class="btn-primary w-full text-sm font-semibold py-2.5 rounded-lg">Registrar movimiento</button>
+            </form>
+        </section>
+
+        {% if cuenta == 'por_consolidar' %}
+        <section class="bg-white border border-gray-200 rounded-2xl p-5" aria-labelledby="ttl-cons">
+            <h2 id="ttl-cons" class="text-sm font-semibold text-ink-900">Consolidar tarjeta</h2>
+            <p class="text-xs text-gray-500 mt-0.5 mb-4">Cuando el banco deposita lo cobrado con tarjeta, pásalo de “Por consolidar” al Fondo.</p>
+            <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 mb-4">
+                <p class="text-sm font-medium text-amber-900">Disponible para pasar al Fondo</p>
+                <p class="num text-3xl font-bold text-ink-900 truncate">{{ resumen.por_consolidar | q }}</p>
+            </div>
+            <form method="POST" action="{{ url_for('dinero.fondo_consolidar') }}" class="space-y-3">
+                <div>
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <label for="cons-monto" class="block text-xs font-medium text-gray-600">Monto depositado (Q)</label>
+                        {% if resumen.por_consolidar > 0 %}
+                        <button type="button" class="text-xs font-semibold text-brand-700 hover:underline"
+                                onclick="document.getElementById('cons-monto').value = '{{ '%.2f' | format(resumen.por_consolidar) }}'">Usar todo el disponible</button>
+                        {% endif %}
+                    </div>
+                    <input id="cons-monto" type="number" name="monto" min="0.01" max="{{ resumen.por_consolidar }}" step="0.01" required inputmode="decimal" autocomplete="off"
+                           value="{{ '%.2f' | format(resumen.por_consolidar) if resumen.por_consolidar > 0 else '' }}" class="input-custom num w-full rounded-lg px-3 py-2 text-sm">
+                    {% if resumen.por_consolidar <= 0 %}<p class="text-xs text-gray-500 mt-1">No hay tarjeta pendiente de consolidar.</p>{% endif %}
+                </div>
+                <div>
+                    <label for="cons-notas" class="block text-xs font-medium text-gray-600 mb-1">Referencia del depósito (opcional)</label>
+                    <input id="cons-notas" type="text" name="notas" maxlength="150" autocomplete="off" placeholder="Ej. Depósito del banco del 12/10…" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                </div>
+                <button {{ 'disabled' if resumen.por_consolidar <= 0 }} class="w-full bg-ink-950 text-white text-sm font-semibold py-2.5 rounded-lg hover:bg-ink-900 transition-colors disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed">Pasar al Fondo</button>
+            </form>
+        </section>
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const NAT = {
+        ingreso: {{ naturalezas_ingreso | tojson }},
+        egreso: {{ naturalezas_egreso | tojson }},
+    };
+    function cargarNaturalezas() {
+        const tipo = document.querySelector('#form-mov input[name="tipo"]:checked').value;
+        const sel = document.getElementById('mov-naturaleza');
+        sel.replaceChildren(new Option('Selecciona…', ''));
+        Object.entries(NAT[tipo]).forEach(([k, v]) => sel.add(new Option(v, k)));
+    }
+    cargarNaturalezas();
+</script>
+{% endblock %}

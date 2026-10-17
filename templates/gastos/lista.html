@@ -1,0 +1,85 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import paginacion %}
+{% block title %}Gastos{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+    <div>
+        <h2 class="text-3xl font-bold text-petroleo">Gastos</h2>
+        <p class="text-gray-500 mt-1">Lo que la clínica gasta para operar: alquiler, luz, limpieza… (las compras a proveedores van en Por pagar).</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('dinero.gastos_categorias') }}" class="bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-md text-sm hover:bg-gray-50">Categorías</a>
+        <a href="{{ url_for('dinero.gasto_nuevo') }}" class="btn-primary px-5 py-2.5 rounded-md font-bold"><i class="fas fa-plus mr-2"></i>Nuevo gasto</a>
+    </div>
+</div>
+
+<div class="bg-white p-6 rounded-lg shadow-md content-card">
+    <form method="GET" class="flex flex-col md:flex-row gap-4 md:items-end mb-6 p-4 rounded-lg border border-gray-100" style="background-color: var(--color-fondo);">
+        <div>
+            <label for="f-desde" class="block text-xs font-bold text-gray-500 mb-1 uppercase">Desde</label>
+            <input id="f-desde" type="date" name="desde" value="{{ desde }}" class="input-custom px-3 py-2 rounded-md bg-white">
+        </div>
+        <div>
+            <label for="f-hasta" class="block text-xs font-bold text-gray-500 mb-1 uppercase">Hasta</label>
+            <input id="f-hasta" type="date" name="hasta" value="{{ hasta }}" class="input-custom px-3 py-2 rounded-md bg-white">
+        </div>
+        <div>
+            <label for="f-cat" class="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoría</label>
+            <select id="f-cat" name="categoria" class="input-custom py-2 px-3 rounded-md bg-white">
+                <option value="">Todas</option>
+                {% for c in categorias %}<option value="{{ c.id }}" {{ 'selected' if categoria_id == c.id }}>{{ c.nombre }}</option>{% endfor %}
+            </select>
+        </div>
+        <button class="btn-primary px-5 py-2 rounded-md font-bold">Filtrar</button>
+        <div class="md:ml-auto text-right">
+            <p class="text-xs text-gray-500 uppercase font-bold">Total del periodo</p>
+            <p class="num text-2xl font-bold text-red-600">{{ total | q }}</p>
+        </div>
+    </form>
+
+    <div class="overflow-x-auto rounded-t-lg border border-gray-100">
+        <table class="min-w-full bg-white text-sm">
+            <thead class="table-header">
+                <tr>
+                    <th class="py-3 px-5 text-left text-xs font-semibold uppercase">Fecha</th>
+                    <th class="py-3 px-5 text-left text-xs font-semibold uppercase">Gasto</th>
+                    <th class="py-3 px-5 text-left text-xs font-semibold uppercase">Categoría</th>
+                    <th class="py-3 px-5 text-left text-xs font-semibold uppercase">Se pagó</th>
+                    <th class="py-3 px-5 text-right text-xs font-semibold uppercase">Monto</th>
+                    <th class="py-3 px-5"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for g in gastos %}
+                <tr class="hover:bg-gray-50 {{ 'opacity-60' if g.estado == 'Anulado' }}">
+                    <td class="py-3 px-5 text-gray-500 whitespace-nowrap num">{{ g.fecha_gasto }}</td>
+                    <td class="py-3 px-5 text-gray-800 max-w-xs break-words">{{ g.descripcion }}<span class="block text-xs text-gray-400">{{ g.usuario or '' }}{% if g.proveedor %} · {{ g.proveedor }}{% endif %}</span>
+                        {% if g.estado == 'Anulado' %}<span class="block text-xs text-red-600">Anulado: {{ g.motivo_anulacion }}</span>{% endif %}</td>
+                    <td class="py-3 px-5 text-gray-600">{{ g.categoria }} <span class="text-xs text-gray-400">({{ g.clasificacion }})</span></td>
+                    <td class="py-3 px-5 text-gray-600">{{ formas.get(g.forma_pago, g.forma_pago) }}
+                        {% if g.id_cuenta_pagar %}<a href="{{ url_for('dinero.cxp_detalle', id_cuenta=g.id_cuenta_pagar) }}" class="block text-xs text-petroleo underline">ver cuenta por pagar</a>{% endif %}</td>
+                    <td class="py-3 px-5 text-right font-bold num {{ 'line-through text-gray-400' if g.estado == 'Anulado' else 'text-gray-800' }}">{{ g.monto | q }}</td>
+                    <td class="py-3 px-5 text-right whitespace-nowrap">
+                        {% if current_user.rol == 'admin' and g.estado == 'Registrado' %}
+                        <a href="{{ url_for('dinero.gasto_editar', id_gasto=g.id) }}" class="text-xs text-petroleo underline mr-2">Editar</a>
+                        <details class="relative inline-block">
+                            <summary class="text-xs text-red-600 underline cursor-pointer list-none inline">Anular</summary>
+                            <form method="POST" action="{{ url_for('dinero.gasto_anular', id_gasto=g.id) }}" class="absolute right-0 z-10 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2 text-left">
+                                <label for="motivo-{{ g.id }}" class="block text-xs font-medium text-gray-600">Motivo *</label>
+                                <input id="motivo-{{ g.id }}" type="text" name="motivo" required minlength="5" maxlength="250" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+                                <button class="w-full bg-red-600 text-white text-xs font-semibold py-2 rounded-lg hover:bg-red-700">Anular gasto</button>
+                            </form>
+                        </details>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="py-10 text-center text-gray-400 italic">No hay gastos en este periodo.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ paginacion(pag) }}
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends 'layout.html' %}
+{% block title %}Abrir caja{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto mt-6">
+    <div class="bg-white rounded-lg shadow-md content-card p-6 sm:p-8 text-center">
+        <div class="w-14 h-14 rounded-full bg-gray-100 mx-auto flex items-center justify-center mb-4">
+            <i class="fas fa-lock text-xl text-gray-500"></i>
+        </div>
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Caja cerrada</h2>
+        <p class="text-sm text-gray-500 mb-6">Abre un turno de caja para empezar a vender y cobrar.</p>
+
+        <form method="POST" action="{{ url_for('dinero.caja_abrir') }}" class="space-y-3 text-left">
+            <div>
+                <label for="monto_inicial" class="block text-sm text-gray-600 mb-1">Efectivo con el que empiezas (Q)</label>
+                <input id="monto_inicial" type="number" name="monto_inicial" min="0" step="0.01" value="0" required autofocus inputmode="decimal"
+                       oninput="alternarOrigen()" class="input-custom num w-full rounded-lg px-3 py-2.5 text-sm text-center">
+            </div>
+            <fieldset id="bloque-origen" class="hidden">
+                <legend class="text-sm text-gray-600 mb-1.5">¿De dónde sale ese dinero? *</legend>
+                <div class="space-y-2">
+                    {% set preferido = 'por_consolidar' if saldos.fondo <= 0 and saldos.por_consolidar > 0 else 'fondo' %}
+                    {% for clave, nombre in [('fondo', 'Fondo'), ('por_consolidar', 'Por consolidar')] %}
+                    {% set saldo = saldos[clave] %}
+                    <label class="cursor-pointer block">
+                        <input type="radio" name="origen_apertura" value="{{ clave }}" class="sr-only peer" {{ 'checked' if clave == preferido }}>
+                        <span class="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white peer-checked:border-brand-600 peer-checked:ring-1 peer-checked:ring-brand-600 peer-checked:bg-brand-50">
+                            <span class="text-ink-900">{{ nombre }}</span>
+                            <span class="num text-xs {{ 'text-gray-500' if saldo > 0 else 'text-amber-700' }}">{{ saldo | q }}{% if saldo <= 0 %} · sin saldo{% endif %}</span>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+                {% if current_user.rol == 'admin' %}
+                <p class="text-xs text-gray-500 mt-2">¿Sin saldo? Registra el dinero primero en <a href="{{ url_for('dinero.fondo') }}" class="underline">Fondo</a> (como "saldo inicial").</p>
+                {% else %}
+                <p class="text-xs text-gray-500 mt-2">Si no hay saldo suficiente, pide al administrador que registre el dinero en el Fondo.</p>
+                {% endif %}
+            </fieldset>
+            <button type="submit" class="btn-primary w-full text-sm font-bold py-2.5 rounded-lg">Abrir caja</button>
+        </form>
+        <a href="{{ url_for('dinero.caja_historial') }}" class="inline-block mt-5 text-xs text-gray-500 underline">Ver turnos anteriores</a>
+    </div>
+</div>
+<script>
+    function alternarOrigen() {
+        const monto = parseFloat(document.getElementById('monto_inicial').value) || 0;
+        document.getElementById('bloque-origen').classList.toggle('hidden', monto <= 0);
+    }
+    alternarOrigen();
+</script>
+{% endblock %}

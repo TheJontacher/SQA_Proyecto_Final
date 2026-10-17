@@ -1,0 +1,24 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver %}
+{% block title %}Editar cuenta por pagar #{{ cuenta.id }}{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.cxp_detalle', id_cuenta=cuenta.id), 'Volver a la cuenta') }}
+<h2 class="text-3xl font-bold text-petroleo mb-1">Editar cuenta #{{ cuenta.id }}</h2>
+<p class="text-gray-500 mb-6">{{ cuenta.proveedor or '—' }} · {{ cuenta.saldo_pendiente | q }} pendientes. El monto y el proveedor no se editan: afectarían los pagos ya registrados.</p>
+
+<form method="POST" class="max-w-xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 space-y-5">
+    <div>
+        <label for="descripcion" class="block text-sm text-gray-600 mb-1">Descripción</label>
+        <input id="descripcion" type="text" name="descripcion" required minlength="3" maxlength="300" value="{{ cuenta.descripcion }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div>
+        <label for="fecha_vencimiento" class="block text-sm text-gray-600 mb-1">Fecha de vencimiento</label>
+        <input id="fecha_vencimiento" type="date" name="fecha_vencimiento" value="{{ cuenta.fecha_vencimiento or '' }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <div class="flex gap-3">
+        <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Guardar</button>
+        <a href="{{ url_for('dinero.cxp_detalle', id_cuenta=cuenta.id) }}" class="text-sm text-gray-600 px-5 py-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

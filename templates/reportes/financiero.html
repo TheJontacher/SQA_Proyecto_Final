@@ -1,0 +1,187 @@
+{% extends 'layout.html' %}
+{% from 'reportes/_comun.html' import tabs, filtros with context %}
+{% block title %}Reporte financiero{% endblock %}
+
+{% macro delta(pct, bueno_si_sube=True) %}
+{% if pct is none %}<span class="text-xs text-gray-500">sin base para comparar</span>
+{% else %}
+<span class="text-xs num font-medium {{ 'text-brand-700' if (pct >= 0) == bueno_si_sube else 'text-red-600' }}">{{ '▲' if pct >= 0 else '▼' }} {{ '{:.0f}'.format(pct | abs) }}%</span>
+<span class="text-xs text-gray-500">vs. periodo anterior</span>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<h2 class="text-3xl font-bold text-petroleo mb-5">Reportes</h2>
+{{ tabs('financiero') }}
+{{ filtros(endpoint, desde, hasta, hoy_iso, hasta_menos_semana, inicio_mes_iso) }}
+
+<p class="text-sm text-gray-600 mb-5">
+    Periodo: <span class="num">{{ desde.strftime('%d/%m/%Y') }}</span> al <span class="num">{{ hasta.strftime('%d/%m/%Y') }}</span>
+    · se compara con <span class="num">{{ previo_desde.strftime('%d/%m') }}</span> al <span class="num">{{ previo_hasta.strftime('%d/%m/%Y') }}</span>
+</p>
+
+{# ---------- Lectura del periodo (reglas fijas, sin IA) ---------- #}
+<section class="bg-white border border-gray-200 rounded-2xl p-5 sm:p-6 mb-6" aria-labelledby="ttl-lectura">
+    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+        <h2 id="ttl-lectura" class="text-base font-semibold tracking-tight text-ink-900">Lectura del periodo</h2>
+        <p class="text-xs text-gray-500">Calculada con reglas fijas a partir de tus registros · no usa inteligencia artificial</p>
+    </div>
+    <p class="text-sm text-gray-700">{{ lectura.resumen }}</p>
+    <div class="grid md:grid-cols-2 gap-4 mt-4">
+        {% if lectura.alertas or lectura.positivos %}
+        <div>
+            <h3 class="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2">Alertas</h3>
+            <ul class="space-y-1.5">
+                {% for a in lectura.alertas %}<li class="flex gap-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><span aria-hidden="true">!</span><span>{{ a }}</span></li>{% endfor %}
+                {% for b in lectura.positivos %}<li class="flex gap-2 text-sm text-brand-800 bg-brand-50 border border-brand-200 rounded-lg px-3 py-2"><span aria-hidden="true">✓</span><span>{{ b }}</span></li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if lectura.sugerencias %}
+        <div>
+            <h3 class="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2">Qué podrías hacer</h3>
+            <ul class="space-y-1.5">
+                {% for sg in lectura.sugerencias %}<li class="flex gap-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2"><span aria-hidden="true" class="text-brand-600">→</span><span>{{ sg }}</span></li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+{# ---------- Indicadores con comparativo ---------- #}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    {% for nombre, actual, previo, pct in comparativo %}
+    <div class="{{ 'bg-brand-700 text-white' if nombre == 'Utilidad neta' else 'bg-white border border-gray-200' }} rounded-2xl p-5">
+        <p class="text-xs {{ 'text-brand-100' if nombre == 'Utilidad neta' else 'text-gray-500' }}">{{ nombre }}</p>
+        <p class="num text-2xl font-semibold tracking-tight mt-1 {{ '' if nombre == 'Utilidad neta' else ('text-red-600' if actual < 0 else 'text-ink-900') }}">{{ actual | q }}</p>
+        <p class="mt-1">{% if nombre == 'Utilidad neta' %}<span class="text-xs text-brand-100">{{ ('▲ ' if pct >= 0 else '▼ ') ~ ('{:.0f}%'.format(pct | abs)) ~ ' vs. anterior' if pct is not none else 'sin base para comparar' }}</span>{% else %}{{ delta(pct, nombre != 'Gastos') }}{% endif %}</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="grid xl:grid-cols-2 gap-6 mb-6">
+    {# ---------- Estado de resultados ---------- #}
+    <section class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100"><h2 class="text-sm font-semibold text-ink-900">Estado de resultados</h2></div>
+        <table class="w-full text-sm">
+            <tbody class="divide-y divide-gray-100">
+                <tr><td class="px-5 py-2.5 text-gray-700">Ventas <span class="text-xs text-gray-500">({{ er.cantidad_ventas }})</span></td><td class="px-5 py-2.5 text-right num text-ink-900">{{ er.ventas | q }}</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-600">(−) Costo de lo vendido</td><td class="px-5 py-2.5 text-right num text-gray-600">{{ er.costo | q }}</td></tr>
+                <tr class="bg-gray-50"><td class="px-5 py-2.5 font-medium text-ink-900">Utilidad bruta {% if er.margen_bruto_pct is not none %}<span class="text-xs font-normal text-gray-500">· margen {{ '{:.1f}'.format(er.margen_bruto_pct) }}%</span>{% endif %}</td><td class="px-5 py-2.5 text-right num font-medium text-ink-900">{{ er.utilidad_bruta | q }}</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-600">(−) Gastos fijos</td><td class="px-5 py-2.5 text-right num text-gray-600">{{ er.gastos_fijos | q }}</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-600">(−) Gastos variables</td><td class="px-5 py-2.5 text-right num text-gray-600">{{ er.gastos_variables | q }}</td></tr>
+                <tr><td class="px-5 py-2.5 text-gray-600">(+) Otros ingresos</td><td class="px-5 py-2.5 text-right num text-gray-600">{{ er.otros_ingresos | q }}</td></tr>
+                <tr class="bg-brand-50"><td class="px-5 py-3 font-semibold text-ink-900">Utilidad neta</td><td class="px-5 py-3 text-right num font-semibold {{ 'text-red-600' if er.utilidad_neta < 0 else 'text-brand-800' }}">{{ er.utilidad_neta | q }}</td></tr>
+            </tbody>
+        </table>
+        {% if er.gastos_por_categoria %}
+        <div class="px-5 py-3 border-t border-gray-100 bg-gray-50">
+            <p class="text-xs font-medium uppercase tracking-wider text-gray-500 mb-1.5">En qué se fueron los gastos</p>
+            <ul class="space-y-1">
+                {% for nombre, clase, total in er.gastos_por_categoria %}
+                <li class="flex justify-between gap-3 text-sm"><span class="text-gray-700">{{ nombre }} <span class="text-xs text-gray-500">({{ clase }})</span></span><span class="num text-gray-700">{{ total | q }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <p class="px-5 py-3 border-t border-gray-100 text-xs text-gray-500">El costo de lo vendido usa el costo guardado en cada venta; en ventas anteriores al nuevo sistema, el costo actual del producto. Las compras a proveedores no son gasto: entran como costo cuando se vende lo comprado.</p>
+    </section>
+
+    {# ---------- Punto de equilibrio ---------- #}
+    <section class="bg-white border border-gray-200 rounded-2xl p-5">
+        <h2 class="text-sm font-semibold text-ink-900">Punto de equilibrio</h2>
+        {% set eq = er.equilibrio %}
+        {% if eq.ventas_necesarias is not none %}
+        <p class="text-xs text-gray-500 mt-0.5 mb-4">Lo que necesitas vender en el periodo para cubrir todos tus costos.</p>
+        <p class="num text-3xl font-semibold tracking-tight text-ink-900">{{ eq.ventas_necesarias | q }}</p>
+        {% set avance = (er.ventas * 100 / eq.ventas_necesarias) if eq.ventas_necesarias > 0 else 100 %}
+        <div class="mt-3 h-3 bg-gray-100 rounded-full overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [avance, 100] | min | round | int }}" aria-label="Ventas frente al punto de equilibrio">
+            <div class="h-full rounded-full {{ 'bg-brand-600' if eq.diferencia >= 0 else 'bg-amber-500' }}" style="width: {{ [avance, 100] | min | round(1) }}%"></div>
+        </div>
+        <p class="mt-2 text-sm {{ 'text-brand-700' if eq.diferencia >= 0 else 'text-amber-800' }}">
+            {% if eq.diferencia >= 0 %}Ya lo superaste por <strong class="num">{{ eq.diferencia | q }}</strong>.{% else %}Te faltan <strong class="num">{{ (eq.diferencia | abs) | q }}</strong> en ventas.{% endif %}
+        </p>
+        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div><dt class="text-xs text-gray-500">Costos fijos</dt><dd class="num text-ink-900">{{ eq.costos_fijos | q }}</dd></div>
+            <div><dt class="text-xs text-gray-500">Margen de contribución</dt><dd class="num text-ink-900">{{ '{:.1f}%'.format(eq.margen_contribucion_pct) }}</dd></div>
+        </dl>
+        {% else %}
+        <p class="text-sm text-gray-500 mt-3">No se puede calcular todavía: hace falta que haya ventas en el periodo y que cada venta deje margen sobre su costo y sus gastos variables. Registra los gastos fijos (alquiler, sueldos…) como categoría “fijo”.</p>
+        {% endif %}
+    </section>
+</div>
+
+{# ---------- Flujo de dinero ---------- #}
+<section class="bg-white border border-gray-200 rounded-2xl overflow-hidden mb-6">
+    <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="text-sm font-semibold text-ink-900">Flujo de dinero del periodo</h2>
+        <p class="text-xs text-gray-500">Dinero que realmente entró y salió (caja, fondo y por consolidar)</p>
+    </div>
+    <div class="grid md:grid-cols-2 md:divide-x divide-gray-100">
+        <div class="p-5">
+            <p class="text-xs font-medium uppercase tracking-wider text-brand-700 mb-2">Entró · <span class="num">{{ flujo.total_entradas | q }}</span></p>
+            <ul class="space-y-1.5">
+                {% for nombre, monto in flujo.entradas %}<li class="flex justify-between gap-3 text-sm"><span class="text-gray-700">{{ nombre }}</span><span class="num text-ink-900">{{ monto | q }}</span></li>
+                {% else %}<li class="text-sm text-gray-500">Sin entradas.</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="p-5">
+            <p class="text-xs font-medium uppercase tracking-wider text-red-600 mb-2">Salió · <span class="num">{{ flujo.total_salidas | q }}</span></p>
+            <ul class="space-y-1.5">
+                {% for nombre, monto in flujo.salidas %}<li class="flex justify-between gap-3 text-sm"><span class="text-gray-700">{{ nombre }}</span><span class="num text-ink-900">{{ monto | q }}</span></li>
+                {% else %}<li class="text-sm text-gray-500">Sin salidas.</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 grid sm:grid-cols-3 gap-3 text-sm">
+        <div><p class="text-xs text-gray-500">Flujo neto</p><p class="num font-semibold {{ 'text-red-600' if flujo.neto < 0 else 'text-ink-900' }}">{{ flujo.neto | q }}</p></div>
+        <div><p class="text-xs text-gray-500">Saldos iniciales, aportes y préstamos</p><p class="num font-semibold text-ink-900">{{ flujo.financiamiento | q }}</p></div>
+        <div><p class="text-xs text-gray-500">Flujo neto sin ese financiamiento</p><p class="num font-semibold {{ 'text-red-600' if flujo.neto_sin_financiamiento < 0 else 'text-ink-900' }}">{{ flujo.neto_sin_financiamiento | q }}</p></div>
+    </div>
+    {% if flujo.internos %}
+    <p class="px-5 py-3 border-t border-gray-100 text-xs text-gray-500">Traslados entre cuentas (no cuentan como entrada ni salida):
+        {% for nombre, monto in flujo.internos %}{{ nombre }} {{ monto | q }}{{ ' · ' if not loop.last }}{% endfor %}.</p>
+    {% endif %}
+</section>
+
+{# ---------- Obligaciones y saldos ---------- #}
+<div class="grid xl:grid-cols-3 gap-6">
+    <section class="xl:col-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="text-sm font-semibold text-ink-900">Cuentas por cobrar y por pagar</h2>
+            <p class="text-xs text-gray-500">Al {{ hasta.strftime('%d/%m/%Y') }}</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="text-gray-500 text-xs uppercase">
+                    <tr class="border-b border-gray-100">
+                        <th class="text-left px-5 py-2.5 font-medium"></th><th class="text-right px-4 py-2.5 font-medium">Pendiente</th><th class="text-right px-4 py-2.5 font-medium">Vencido</th>
+                        <th class="text-right px-4 py-2.5 font-medium">Vence hoy</th><th class="text-right px-4 py-2.5 font-medium">Próx. 7 días</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for nombre, o in [('Por cobrar (te deben)', oblig.cobrar), ('Por pagar (debes)', oblig.pagar)] %}
+                    <tr>
+                        <td class="px-5 py-3 text-gray-700">{{ nombre }}</td>
+                        <td class="px-4 py-3 text-right num text-ink-900">{{ o.pendiente | q }}</td>
+                        <td class="px-4 py-3 text-right num {{ 'text-red-600 font-medium' if o.vencido > 0 else 'text-gray-500' }}">{{ o.vencido | q }}</td>
+                        <td class="px-4 py-3 text-right num text-gray-600">{{ o.vence_hoy | q }}</td>
+                        <td class="px-4 py-3 text-right num text-gray-600">{{ o.vence_7 | q }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="bg-ink-950 text-white rounded-2xl p-5">
+        <h2 class="text-sm font-semibold">Dinero disponible hoy</h2>
+        <dl class="mt-3 space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-gray-400">Fondo</dt><dd class="num">{{ saldos.fondo | q }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-400">Por consolidar</dt><dd class="num">{{ saldos.por_consolidar | q }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-400">Caja {{ '' if saldos.caja_abierta else '(cerrada)' }}</dt><dd class="num">{{ saldos.caja | q }}</dd></div>
+            <div class="flex justify-between border-t border-white/10 pt-2 font-semibold"><dt>Total</dt><dd class="num">{{ (saldos.fondo + saldos.por_consolidar + saldos.caja) | q }}</dd></div>
+        </dl>
+    </section>
+</div>
+{% endblock %}

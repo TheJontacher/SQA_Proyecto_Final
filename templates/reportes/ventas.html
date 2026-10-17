@@ -1,0 +1,68 @@
+{% extends 'layout.html' %}
+{% from 'reportes/_comun.html' import tabs, filtros with context %}
+{% block title %}Reporte de ventas{% endblock %}
+
+{% block content %}
+<h2 class="text-3xl font-bold text-petroleo mb-5">Reportes</h2>
+{{ tabs('ventas') }}
+{{ filtros(endpoint, desde, hasta, hoy_iso, hasta_menos_semana, inicio_mes_iso) }}
+
+<p class="text-sm text-gray-600 mb-5">Ventas del <span class="num">{{ desde.strftime('%d/%m/%Y') }}</span> al <span class="num">{{ hasta.strftime('%d/%m/%Y') }}</span>. No incluye las canceladas.</p>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-brand-700 text-white rounded-2xl p-5"><p class="text-xs text-brand-100">Total vendido</p><p class="num text-2xl font-semibold mt-1">{{ total_ventas | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Ventas</p><p class="num text-2xl font-semibold mt-1">{{ cantidad_ventas }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Ticket promedio</p><p class="num text-2xl font-semibold mt-1">{{ ticket_promedio | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Utilidad bruta (aprox.)</p><p class="num text-2xl font-semibold mt-1 {{ 'text-red-600' if utilidad_bruta < 0 }}">{{ utilidad_bruta | q }}</p></div>
+</div>
+
+<div class="grid sm:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Productos</p><p class="num text-xl font-semibold mt-1">{{ por_tipo.get('Producto', 0) | q }}</p></div>
+    <div class="bg-white border border-gray-200 rounded-2xl p-5"><p class="text-xs text-gray-500">Servicios</p><p class="num text-xl font-semibold mt-1">{{ por_tipo.get('Servicio', 0) | q }}</p></div>
+</div>
+
+<div class="grid xl:grid-cols-3 gap-6 mb-6">
+    <section class="xl:col-span-2 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-semibold text-ink-900">Ventas por día</h3></div>
+        {% if por_dia %}
+        <ul class="divide-y divide-gray-100">
+            {% for dia, cantidad, total, pct in por_dia %}
+            <li class="px-5 py-2.5 text-sm">
+                <div class="flex justify-between gap-3"><span class="text-gray-700 num">{{ dia }} <span class="text-xs text-gray-400">· {{ cantidad }} venta{{ 's' if cantidad != 1 }}</span></span><span class="num font-medium text-ink-900">{{ total | q }}</span></div>
+                <div class="mt-1.5 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-brand-500 rounded-full" style="width: {{ '%.1f' | format(pct) }}%"></div></div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="px-5 py-8 text-sm text-gray-500 text-center">No hay ventas en este periodo.</p>{% endif %}
+    </section>
+
+    <div class="space-y-6">
+        <section class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-semibold text-ink-900">Por método de pago</h3></div>
+            <ul class="divide-y divide-gray-100">
+                {% for metodo, cantidad, total in por_metodo %}<li class="px-5 py-2.5 flex justify-between text-sm"><span class="text-gray-700">{{ metodo }} <span class="text-xs text-gray-400">· {{ cantidad }}</span></span><span class="num text-ink-900">{{ total | q }}</span></li>
+                {% else %}<li class="px-5 py-6 text-sm text-gray-500 text-center">Sin datos.</li>{% endfor %}
+            </ul>
+        </section>
+        <section class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-semibold text-ink-900">Por vendedor</h3></div>
+            <ul class="divide-y divide-gray-100">
+                {% for nombre, cantidad, total in por_usuario %}<li class="px-5 py-2.5 flex justify-between text-sm"><span class="text-gray-700">{{ nombre }} <span class="text-xs text-gray-400">· {{ cantidad }}</span></span><span class="num text-ink-900">{{ total | q }}</span></li>
+                {% else %}<li class="px-5 py-6 text-sm text-gray-500 text-center">Sin datos.</li>{% endfor %}
+            </ul>
+        </section>
+    </div>
+</div>
+
+<section class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100"><h3 class="text-sm font-semibold text-ink-900">Los 10 más vendidos</h3></div>
+    <table class="w-full text-sm">
+        <thead class="text-gray-500 text-xs uppercase"><tr class="border-b border-gray-100"><th class="text-left px-5 py-2.5">Artículo</th><th class="text-right px-5 py-2.5">Unidades</th><th class="text-right px-5 py-2.5">Ingreso</th></tr></thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for nombre, unidades, ingreso, tipo in top %}
+            <tr><td class="px-5 py-2.5 text-gray-800">{{ nombre }} <span class="text-xs text-gray-400">· {{ tipo }}</span></td><td class="px-5 py-2.5 text-right num">{{ unidades }}</td><td class="px-5 py-2.5 text-right num">{{ ingreso | q }}</td></tr>
+            {% else %}<tr><td colspan="3" class="px-5 py-6 text-center text-gray-500">Sin datos.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

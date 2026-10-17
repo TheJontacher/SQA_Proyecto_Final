@@ -1,0 +1,68 @@
+{% extends 'layout.html' %}
+{% from '_macros.html' import volver %}
+{% block title %}Categorías de gasto{% endblock %}
+
+{% block content %}
+{{ volver(url_for('dinero.gastos_lista'), 'Volver a gastos') }}
+<h2 class="text-3xl font-bold text-petroleo mb-1">Categorías de gasto</h2>
+<p class="text-gray-500 mb-6">Un gasto <strong>fijo</strong> se paga igual cada mes (alquiler, sueldos); uno <strong>variable</strong> cambia con la actividad. Esa clasificación alimenta el punto de equilibrio del reporte financiero.</p>
+
+<div class="grid lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-white rounded-lg shadow-md content-card overflow-hidden">
+        <table class="min-w-full text-sm">
+            <thead class="table-header text-xs uppercase">
+                <tr><th class="text-left px-5 py-3">Categoría</th><th class="text-left px-5 py-3">Tipo</th><th class="text-center px-5 py-3">Gastos</th><th class="px-5 py-3"></th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for c in categorias %}
+                <tr class="{{ 'opacity-50' if not c.activo }}">
+                    {% if current_user.rol == 'admin' %}
+                    <td class="px-5 py-2" colspan="2">
+                        <form method="POST" action="{{ url_for('dinero.gastos_categoria_editar', id_categoria=c.id) }}" class="flex gap-2 items-center">
+                            <input type="text" name="nombre" value="{{ c.nombre }}" required minlength="2" maxlength="120" class="input-custom flex-1 rounded-lg px-2 py-1.5 text-sm" aria-label="Nombre">
+                            <select name="clasificacion" class="input-custom bg-white rounded-lg px-2 py-1.5 text-sm" aria-label="Tipo">
+                                <option value="fijo" {{ 'selected' if c.clasificacion == 'fijo' }}>fijo</option>
+                                <option value="variable" {{ 'selected' if c.clasificacion == 'variable' }}>variable</option>
+                            </select>
+                            <button class="text-xs text-petroleo underline">Guardar</button>
+                        </form>
+                    </td>
+                    {% else %}
+                    <td class="px-5 py-3 text-gray-800">{{ c.nombre }}</td>
+                    <td class="px-5 py-3 text-gray-500">{{ c.clasificacion }}</td>
+                    {% endif %}
+                    <td class="px-5 py-3 text-center text-gray-500 num">{{ c.usos }}</td>
+                    <td class="px-5 py-3 text-right">
+                        {% if current_user.rol == 'admin' %}
+                        <form method="POST" action="{{ url_for('dinero.gastos_categoria_alternar', id_categoria=c.id) }}" class="inline">
+                            <button class="text-xs {{ 'text-brand-700' if not c.activo else 'text-red-600' }} underline">{{ 'Activar' if not c.activo else 'Desactivar' }}</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if current_user.rol == 'admin' %}
+    <div class="bg-white border border-gray-200 rounded-2xl p-6 self-start">
+        <h3 class="text-sm font-semibold text-ink-900 mb-3">Nueva categoría</h3>
+        <form method="POST" class="space-y-3">
+            <div>
+                <label for="nueva-nombre" class="block text-xs text-gray-600 mb-1">Nombre</label>
+                <input id="nueva-nombre" type="text" name="nombre" required minlength="2" maxlength="120" autocomplete="off" class="input-custom w-full rounded-lg px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="nueva-tipo" class="block text-xs text-gray-600 mb-1">Tipo</label>
+                <select id="nueva-tipo" name="clasificacion" required class="input-custom w-full bg-white rounded-lg px-3 py-2 text-sm">
+                    <option value="variable">Variable</option>
+                    <option value="fijo">Fijo</option>
+                </select>
+            </div>
+            <button class="btn-primary w-full text-sm font-bold py-2.5 rounded-lg">Crear categoría</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

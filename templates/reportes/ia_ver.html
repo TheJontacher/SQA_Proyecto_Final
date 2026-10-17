@@ -1,0 +1,27 @@
+{% extends 'layout.html' %}
+{% block title %}Reporte con IA{% endblock %}
+{% block content %}
+<div class="no-print mb-4"><a href="{{ url_for('ia.reportes_ia') }}" class="text-sm text-petroleo underline">← Reportes con IA</a></div>
+<div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+    <div>
+        <h2 class="text-3xl font-bold text-petroleo">Reporte con IA</h2>
+        <p class="text-gray-500 mt-1 num">{{ r.desde }} → {{ r.hasta }} · {{ r.modelo }} · {{ creado.strftime('%d/%m/%Y %H:%M') if creado }}</p>
+        {% if r.enviado_a %}<p class="text-xs text-brand-700 mt-1"><i class="fas fa-paper-plane mr-1"></i> Enviado a {{ r.enviado_a }}</p>{% endif %}
+    </div>
+    <button type="button" onclick="window.print()" class="no-print border border-gray-200 bg-white rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><i class="fas fa-print mr-1"></i> Imprimir</button>
+</div>
+
+<article class="max-w-3xl bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 text-gray-800 text-sm">{{ html | safe }}</article>
+<p class="max-w-3xl text-xs text-gray-400 mt-3">Análisis automático a partir de los datos del sistema: valida las cifras clave antes de tomar decisiones.</p>
+
+{% if correo_listo %}
+<form method="POST" action="{{ url_for('ia.reporte_ia_enviar', id=r.id) }}" class="no-print max-w-3xl mt-6 bg-white border border-gray-200 rounded-2xl p-5 flex flex-wrap items-end gap-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="flex-1 min-w-[16rem]">
+        <label for="destinatarios" class="block text-sm text-gray-500 mb-1">Enviar por correo a (separados por coma)</label>
+        <input id="destinatarios" name="destinatarios" type="text" required value="{{ email_usuario }}" class="input-custom w-full rounded-lg px-3 py-2.5 text-sm">
+    </div>
+    <button class="btn-primary text-sm font-bold px-5 py-2.5 rounded-lg">Enviar</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <script>
-        window.escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        })[character]);
-    </script>
     <title>Clínica - {% block title %}{% endblock %}</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- FontAwesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
+
+    <script>
+        // Escapa texto (también comillas, para atributos) antes de armarlo como HTML con datos del servidor.
+        function esc(texto) {
+            return String(texto == null ? '' : texto).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+    </script>
+
     <!-- CONFIGURACIÓN DE COLORES -->
     <script>
         tailwind.config = {
@@ -27,17 +29,43 @@
                             primary: '#23807A',   // Verde Teal
                             dark: '#1B635E',      // Teal más oscuro
                             light: '#4FD1C5',     // Teal claro
-                            bg: '#F9FAFB',        
-                            text: '#2D3748',      
-                            surface: '#ffffff'    
-                        }
+                            bg: '#F9FAFB',
+                            text: '#2D3748',
+                            surface: '#ffffff'
+                        },
+                        // Escala de la marca (sale del teal de la clínica); la usan las pantallas de dinero.
+                        brand: {
+                            50: '#effaf8', 100: '#d3f2ee', 200: '#a8e5dd', 300: '#74d0c6', 400: '#45b6ab',
+                            500: '#2c9a90', 600: '#23807A', 700: '#1B635E', 800: '#164f4b', 900: '#123f3c'
+                        },
+                        ink: { 800: '#1f2a2a', 900: '#142020', 950: '#0b1616' }
                     }
                 }
             }
         }
     </script>
-    
+
     <style>
+        :root {
+            --color-petroleo: #1F7A7A;
+            --color-salvia: #7FB2B2;
+            --color-arena: #EDC988;
+            --color-fondo: #F3E6E0;
+            --color-neutro: #BCCCD1;
+        }
+        /* Piezas comunes (las pantallas más antiguas las redefinen igual en su propio <style>). */
+        .text-petroleo { color: var(--color-petroleo); }
+        .btn-primary { background-color: var(--color-petroleo); color: white; transition: background-color 0.3s; }
+        .btn-primary:hover { background-color: #165e5e; }
+        .btn-secondary { background-color: var(--color-neutro); color: #374151; transition: background-color 0.3s; }
+        .btn-secondary:hover { background-color: #9fb3b9; }
+        .input-custom { border: 1px solid var(--color-neutro); transition: all 0.3s; }
+        .input-custom:focus { outline: none; border-color: var(--color-petroleo); box-shadow: 0 0 0 3px rgba(31, 122, 122, 0.1); }
+        .table-header { background-color: var(--color-salvia); color: white; }
+        .content-card { border-top: 5px solid var(--color-arena); }
+        /* Cifras de ancho fijo: las columnas de montos no "bailan". */
+        .num, td.text-right, th.text-right { font-variant-numeric: tabular-nums; }
+        :where(a, button, select, summary, [tabindex]):focus-visible { outline: 2px solid #1F7A7A; outline-offset: 2px; }
         @media print {
             aside, header, .no-print { display: none !important; }
             main { margin: 0; padding: 0; width: 100%; }
@@ -50,85 +78,64 @@
 </head>
 <body class="bg-clinica-bg text-gray-800 font-sans antialiased h-screen flex overflow-hidden">
 
+    {% macro enlace(endpoint, clave, icono, texto) -%}
+    <li>
+        <a href="{{ url_for(endpoint) }}" {% if active_page == clave %}aria-current="page"{% endif %}
+           class="flex items-center px-6 py-2 transition-all duration-200 {% if active_page == clave %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
+            <i class="fas {{ icono }} w-6 text-center"></i>
+            <span class="ml-3">{{ texto }}</span>
+        </a>
+    </li>
+    {%- endmacro %}
+
     <!-- SIDEBAR -->
     <aside class="bg-clinica-primary text-white w-64 flex flex-col shadow-2xl z-30 transition-transform duration-300 ease-in-out transform -translate-x-full md:translate-x-0 absolute md:relative h-full" id="sidebar">
-        
+
         <!-- LOGO -->
-        <div class="p-6 flex flex-col items-center justify-center border-b border-white/10">
-            <div class="bg-white rounded-xl p-2 w-32 h-24 flex items-center justify-center shadow-lg mb-3">
+        <div class="p-4 flex flex-col items-center justify-center border-b border-white/10">
+            <div class="bg-white rounded-xl p-2 w-28 h-20 flex items-center justify-center shadow-lg mb-2">
                 <img src="{{ url_for('static', filename='img/LOGOTIPO.png') }}" alt="Logo" class="max-h-full max-w-full object-contain">
             </div>
             <h1 class="text-lg font-bold tracking-widest uppercase text-white/90">CLÍNICA</h1>
         </div>
 
         <!-- MENÚ DE NAVEGACIÓN -->
-        <nav class="flex-1 overflow-y-auto py-4">
-            <ul class="space-y-1">
-                <li>
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'dashboard' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-tachometer-alt w-6 text-center"></i>
-                        <span class="ml-3">Dashboard</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('pacientes') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'pacientes' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-users w-6 text-center"></i>
-                        <span class="ml-3">Pacientes</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('inventario') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'inventario' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-boxes w-6 text-center"></i>
-                        <span class="ml-3">Inventario</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('ventas') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'ventas' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-cash-register w-6 text-center"></i>
-                        <span class="ml-3">Caja / Ventas</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('citas') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'citas' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-calendar-alt w-6 text-center"></i>
-                        <span class="ml-3">Agenda de Citas</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('creditos') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'creditos' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-hand-holding-usd w-6 text-center"></i>
-                        <span class="ml-3">Ctas. por Cobrar</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('pagos') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'pagos' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-file-invoice-dollar w-6 text-center"></i>
-                        <span class="ml-3">Ctas. por Pagar</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ url_for('historial_cierres') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'reportes' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                        <i class="fas fa-chart-line w-6 text-center"></i>
-                        <span class="ml-3">Reportes</span>
-                    </a>
-                </li>
+        <nav class="flex-1 overflow-y-auto py-4" aria-label="Principal">
+            <ul class="space-y-0.5">
+                {{ enlace('dashboard', 'dashboard', 'fa-tachometer-alt', 'Dashboard') }}
+                {{ enlace('pacientes', 'pacientes', 'fa-users', 'Pacientes') }}
+                {{ enlace('citas', 'citas', 'fa-calendar-alt', 'Agenda de Citas') }}
+                {{ enlace('inventario', 'inventario', 'fa-boxes', 'Inventario') }}
+
+                <div class="mt-4 pt-4 border-t border-white/10">
+                    <p class="px-6 text-[10px] uppercase text-teal-200 font-bold mb-2">Dinero</p>
+                    {{ enlace('ventas', 'ventas', 'fa-receipt', 'Ventas') }}
+                    {{ enlace('dinero.caja', 'caja', 'fa-cash-register', 'Caja') }}
+                    {{ enlace('dinero.cxc_lista', 'cxc', 'fa-hand-holding-usd', 'Por cobrar') }}
+                    {% if current_user.rol == 'admin' %}
+                    {{ enlace('dinero.cxp_lista', 'cxp', 'fa-file-invoice-dollar', 'Por pagar') }}
+                    {% endif %}
+                    {{ enlace('dinero.gastos_lista', 'gastos', 'fa-minus-circle', 'Gastos') }}
+                    {% if current_user.rol == 'admin' %}
+                    {{ enlace('dinero.fondo', 'fondo', 'fa-piggy-bank', 'Fondo') }}
+                    {% endif %}
+                    {{ enlace('dinero.reportes', 'reportes', 'fa-chart-line', 'Reportes') }}
+                    {% if current_user.rol == 'admin' %}
+                    {{ enlace('ia.reportes_ia', 'reportes_ia', 'fa-robot', 'Reportes con IA') }}
+                    {% endif %}
+                    {{ enlace('facturacion.documentos', 'facturacion', 'fa-file-invoice', 'Facturación') }}
+                </div>
 
                 <!-- SECCIONES SOLO PARA ADMINISTRADORES -->
                 {% if current_user.rol == 'admin' %}
                 <div class="mt-4 pt-4 border-t border-white/10">
                     <p class="px-6 text-[10px] uppercase text-teal-200 font-bold mb-2">Administración</p>
-                    <li>
-                        <a href="{{ url_for('lista_usuarios') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'usuarios' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                            <i class="fas fa-user-shield w-6 text-center"></i>
-                            <span class="ml-3">Usuarios</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{{ url_for('eliminados_recientemente') }}" class="flex items-center px-6 py-3 transition-all duration-200 {% if active_page == 'eliminados_recientemente' %} bg-white/20 border-l-4 border-white font-bold {% else %} text-white/80 hover:bg-white/10 hover:text-white {% endif %}">
-                            <i class="fas fa-trash-alt w-6 text-center"></i>
-                            <span class="ml-3">Papelera</span>
-                        </a>
-                    </li>
+                    {{ enlace('dinero.proveedores_lista', 'proveedores', 'fa-truck', 'Proveedores') }}
+                    {{ enlace('facturacion.configuracion', 'config_fiscal', 'fa-sliders-h', 'Config. de facturación') }}
+                    {{ enlace('ia.configuracion', 'configuracion', 'fa-cog', 'Configuración') }}
+                    {{ enlace('lista_usuarios', 'usuarios', 'fa-user-shield', 'Usuarios') }}
+                    {{ enlace('auditoria', 'auditoria', 'fa-clipboard-list', 'Auditoría') }}
+                    {{ enlace('eliminados_recientemente', 'eliminados_recientemente', 'fa-trash-alt', 'Papelera') }}
                 </div>
                 {% endif %}
             </ul>
@@ -147,18 +154,16 @@
                 </div>
             </div>
             {% endif %}
-            <form method="POST" action="{{ url_for('logout') }}">
-                <button type="submit" class="w-full flex items-center justify-center py-2 px-4 rounded bg-red-500/10 hover:bg-red-500 text-teal-100 hover:text-white transition duration-200 text-sm font-medium border border-red-500/30">
-                    <i class="fas fa-sign-out-alt mr-2"></i> Cerrar Sesión
-                </button>
-            </form>
+            <a href="{{ url_for('logout') }}" class="flex items-center justify-center py-2 px-4 rounded bg-red-500/10 hover:bg-red-500 text-teal-100 hover:text-white transition duration-200 text-sm font-medium border border-red-500/30">
+                <i class="fas fa-sign-out-alt mr-2"></i> Cerrar Sesión
+            </a>
         </div>
     </aside>
 
     <!-- CONTENIDO PRINCIPAL -->
     <div class="flex-1 flex flex-col h-full overflow-hidden">
         <header class="bg-white shadow-sm h-16 flex items-center justify-between px-4 md:hidden z-20 shrink-0">
-            <button id="mobile-menu-btn" class="text-clinica-primary p-2 rounded hover:bg-gray-100">
+            <button id="mobile-menu-btn" class="text-clinica-primary p-2 rounded hover:bg-gray-100" aria-label="Abrir menú" aria-controls="sidebar">
                 <i class="fas fa-bars fa-lg"></i>
             </button>
             <h1 class="text-lg font-bold text-clinica-primary tracking-widest">CLÍNICA</h1>
@@ -166,14 +171,14 @@
         </header>
 
         <main class="flex-1 overflow-x-hidden overflow-y-auto bg-clinica-bg p-4 md:p-8">
-            
+
             <!-- MENSAJES FLASH -->
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% if messages %}
-                <div class="mb-6 space-y-2 no-print">
+                <div class="mb-6 space-y-2 no-print" role="status" aria-live="polite">
                   {% for category, message in messages %}
-                    <div class="p-4 rounded-lg border flex items-center shadow-sm {% if category == 'error' %}bg-red-50 border-red-200 text-red-700{% else %}bg-emerald-50 border-emerald-200 text-emerald-700{% endif %}">
-                      <i class="fas {% if category == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %} mr-3"></i>
+                    <div class="p-4 rounded-lg border flex items-center shadow-sm {% if category == 'error' %}bg-red-50 border-red-200 text-red-700{% elif category == 'warning' %}bg-amber-50 border-amber-200 text-amber-800{% else %}bg-emerald-50 border-emerald-200 text-emerald-700{% endif %}">
+                      <i class="fas {% if category == 'error' %}fa-exclamation-circle{% elif category == 'warning' %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %} mr-3"></i>
                       <span class="text-sm font-medium">{{ message }}</span>
                     </div>
                   {% endfor %}
@@ -195,34 +200,75 @@
             function toggleSidebar() { sidebar.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
             btn.addEventListener('click', toggleSidebar); overlay.addEventListener('click', toggleSidebar);
         }
-    </script>
-    <script>
-        (() => {
-            const token = document.querySelector('meta[name="csrf-token"]')?.content;
-            if (!token) return;
 
-            const addToken = (form) => {
-                const method = (form.getAttribute('method') || 'GET').toUpperCase();
-                if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
-                if (form.querySelector('input[name="csrf_token"]')) return;
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'csrf_token';
-                input.value = token;
-                form.appendChild(input);
-            };
+        // Protección CSRF: cada formulario POST lleva el token de la sesión (también los creados por JavaScript).
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+        function agregarToken(form) {
+            if (!form.method || form.method.toLowerCase() !== 'post' || form.querySelector('input[name="csrf_token"]')) return;
+            const campo = document.createElement('input');
+            campo.type = 'hidden'; campo.name = 'csrf_token'; campo.value = CSRF_TOKEN;
+            form.appendChild(campo);
+        }
+        // Los formularios que ya existen lo reciben al cargar (también sirve cuando se envían con form.submit(),
+        // que no dispara el evento "submit"); los que se creen después, al enviarse.
+        document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('form').forEach(agregarToken));
+        document.addEventListener('submit', (e) => agregarToken(e.target), true);
 
-            document.querySelectorAll('form').forEach(addToken);
-            document.addEventListener('submit', (event) => addToken(event.target), true);
-            new MutationObserver((records) => {
-                for (const record of records) {
-                    for (const node of record.addedNodes) {
-                        if (node instanceof HTMLFormElement) addToken(node);
-                        else if (node instanceof Element) node.querySelectorAll('form').forEach(addToken);
+        // Evita el doble envío (doble clic en Cobrar, Pagar, Anular…): al enviar se apagan los botones;
+        // si el envío se cancela se reactivan. Al volver con "atrás" también se reactivan.
+        document.addEventListener('submit', (e) => {
+            const form = e.target;
+            if (!form.method || form.method.toLowerCase() !== 'post') return;
+            setTimeout(() => {
+                if (e.defaultPrevented) return;
+                form.querySelectorAll('button:not([type="button"]), input[type="submit"]').forEach(b => { b.disabled = true; });
+            }, 0);
+        });
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) document.querySelectorAll('form button:disabled').forEach(b => { b.disabled = false; });
+        });
+
+        // Consulta el nombre registrado en SAT para un NIT. Si nombreId es null solo muestra el resultado.
+        async function buscarNitEn(nitId, nombreId, boton, estadoId, apellidoId) {
+            const nit = document.getElementById(nitId).value.trim();
+            const estado = document.getElementById(estadoId);
+            const rotulo = boton.textContent;
+            estado.classList.remove('hidden', 'text-red-600', 'text-brand-700');
+            if (!nit) {
+                estado.textContent = 'Escribe un NIT primero.';
+                estado.classList.add('text-red-600');
+                return;
+            }
+            boton.disabled = true;
+            boton.textContent = 'Buscando…';
+            estado.textContent = '';
+            try {
+                const resp = await fetch('/nit/' + encodeURIComponent(nit), { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'success') {
+                    if (nombreId && apellidoId) {
+                        // Paciente: SAT entrega un solo nombre; se reparte en nombres y apellidos para que la persona lo revise.
+                        document.getElementById(nombreId).value = data.nombres;
+                        document.getElementById(apellidoId).value = data.apellidos;
+                    } else if (nombreId) {
+                        document.getElementById(nombreId).value = data.nombre;
                     }
+                    estado.textContent = apellidoId ? 'Completado desde SAT (' + data.nombre + '). Revisa que nombre y apellido estén bien repartidos.'
+                        : nombreId ? 'Nombre encontrado y completado: ' + data.nombre : 'Resultado: ' + data.nombre;
+                    estado.classList.add('text-brand-700');
+                } else {
+                    estado.textContent = data.message || 'No se pudo consultar el NIT.';
+                    estado.classList.add('text-red-600');
                 }
-            }).observe(document.body, { childList: true, subtree: true });
-        })();
+            } catch (err) {
+                estado.textContent = 'Error de conexión.';
+                estado.classList.add('text-red-600');
+            }
+            boton.disabled = false;
+            boton.textContent = rotulo;
+        }
+
     </script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
