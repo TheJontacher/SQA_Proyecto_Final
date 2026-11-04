@@ -14,9 +14,27 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 import finanzas as fin
-from comun import (D, a_local, admin_required, ahora_utc, dia_local_sql, fecha_o, fin_utc, get_db, hoy_local, inicio_utc,
-                   registrar_auditoria)
-from correo import SEGURIDADES, CorreoError, config_correo, email_valido, enviar_correo, marcar_probado
+from comun import (
+    D,
+    a_local,
+    admin_required,
+    ahora_utc,
+    dia_local_sql,
+    fecha_o,
+    fin_utc,
+    get_db,
+    hoy_local,
+    inicio_utc,
+    registrar_auditoria,
+)
+from correo import (
+    SEGURIDADES,
+    CorreoError,
+    config_correo,
+    email_valido,
+    enviar_correo,
+    marcar_probado,
+)
 from rutas_facturacion import cifrador
 
 bp = Blueprint('ia', __name__)
@@ -115,7 +133,7 @@ def recopilar_datos(db, desde, hasta):
 
     cond = "v.estado <> 'Cancelada' AND v.fecha_venta BETWEEN ? AND ?"
     params = [inicio_utc(desde), fin_utc(hasta)]
-    ticket = (er['ventas'] / er['cantidad_ventas']) if er['cantidad_ventas'] else Decimal('0')
+    ticket = (er['ventas'] / er['cantidad_ventas']) if er['cantidad_ventas'] else Decimal(0)
     por_metodo = [{'metodo': fin.ETIQUETA_METODO.get(r[0], r[0]), 'ventas': r[1], 'total_q': _s(r[2])} for r in db.execute(
         f"SELECT v.metodo_pago, COUNT(*), SUM(v.monto_total) FROM ventas v WHERE {cond} GROUP BY 1 ORDER BY 3 DESC", params)]
     por_vendedor = [{'vendedor': r[0], 'ventas': r[1], 'total_q': _s(r[2])} for r in db.execute(

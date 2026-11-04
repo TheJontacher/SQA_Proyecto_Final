@@ -17,10 +17,13 @@ from unittest import mock
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
-TMP = tempfile.mkdtemp(prefix='clinica_test_')
+TMP = os.environ.get('CLINICA_TEST_ROOT') or tempfile.mkdtemp(prefix='clinica_test_')
+os.makedirs(TMP, exist_ok=True)
 os.environ['CLINICA_DB'] = os.path.join(TMP, 'prueba.db')
 os.environ['CLINICA_BACKUP_DIR'] = os.path.join(TMP, 'backups')
 os.environ['FISCAL_ENCRYPTION_KEY'] = 'WjtZ0ZfG4m9mS5y0y2o5l0tQ1w3e6r8t0y2u4i6o8pA='
+os.environ['SECRET_KEY'] = 'clave-de-prueba'
+os.environ.pop('DATABASE_URL', None)
 os.environ.pop('FLASK_ENV', None)
 
 from werkzeug.security import generate_password_hash  # noqa: E402
@@ -67,11 +70,20 @@ def crear_base_antigua():
 crear_base_antigua()
 
 import app as aplicacion  # noqa: E402  (al importarse migra la base)
+import comun  # noqa: E402
 import finanzas as fin  # noqa: E402
-from comun import D  # noqa: E402
 
 aplicacion.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, UPLOAD_FOLDER=os.path.join(TMP, 'uploads'))
 os.makedirs(aplicacion.app.config['UPLOAD_FOLDER'], exist_ok=True)
+_raiz_temporal = os.path.realpath(TMP)
+for _ruta in (os.environ['CLINICA_DB'], os.environ['CLINICA_BACKUP_DIR'], aplicacion.app.config['UPLOAD_FOLDER']):
+    if os.path.commonpath((_raiz_temporal, os.path.realpath(_ruta))) != _raiz_temporal:
+        raise RuntimeError(f'La ruta de prueba no es temporal: {_ruta}')
+if not (
+    database.DATABASE_NAME == comun.DATABASE == aplicacion.DATABASE == os.environ['CLINICA_DB']
+    and database.BACKUP_DIR == os.environ['CLINICA_BACKUP_DIR']
+):
+    raise RuntimeError('La aplicación y sus módulos no comparten la configuración temporal de base de datos.')
 
 
 def consulta(sql, *params):
@@ -251,15 +263,15 @@ class Test2Flujos(unittest.TestCase):
     def test_24_validaciones_de_la_venta(self):
         antes = uno('SELECT COUNT(*) FROM ventas')
         casos = [
-            ('cantidad cero', dict(items=[(1, 0, 0)]), 'inválid'),
-            ('cantidad negativa', dict(items=[(1, -3, 0)]), 'inválid'),
-            ('descuento mayor que el precio', dict(items=[(1, 1, 80)]), 'descuento'),
-            ('descuento general excesivo', dict(items=[(1, 1, 0)], descuento='999'), 'descuento general'),
-            ('más que el stock', dict(items=[(1, 500, 0)]), 'stock'),
-            ('método inventado', dict(items=[(1, 1, 0)], metodo='Bitcoin'), 'método de pago'),
-            ('línea repetida que supera el stock', dict(items=[(1, 4, 0), (1, 4, 0), (1, 4, 0)]), 'stock'),
-            ('paciente inexistente', dict(items=[(1, 1, 0)], paciente=999), 'paciente'),
-            ('artículo inexistente', dict(items=[(999, 1, 0)]), 'ya no existe'),
+            ('cantidad cero', {'items': [(1, 0, 0)]}, 'inválid'),
+            ('cantidad negativa', {'items': [(1, -3, 0)]}, 'inválid'),
+            ('descuento mayor que el precio', {'items': [(1, 1, 80)]}, 'descuento'),
+            ('descuento general excesivo', {'items': [(1, 1, 0)], 'descuento': '999'}, 'descuento general'),
+            ('más que el stock', {'items': [(1, 500, 0)]}, 'stock'),
+            ('método inventado', {'items': [(1, 1, 0)], 'metodo': 'Bitcoin'}, 'método de pago'),
+            ('línea repetida que supera el stock', {'items': [(1, 4, 0), (1, 4, 0), (1, 4, 0)]}, 'stock'),
+            ('paciente inexistente', {'items': [(1, 1, 0)], 'paciente': 999}, 'paciente'),
+            ('artículo inexistente', {'items': [(999, 1, 0)]}, 'ya no existe'),
         ]
         for nombre, kw, _texto in casos:
             with self.subTest(nombre):
@@ -301,7 +313,7 @@ class Test2Flujos(unittest.TestCase):
     # ---- gastos y cuentas por pagar ----
     def test_30_gastos(self):
         categoria = uno("SELECT id FROM categorias_gasto WHERE nombre = 'Alquiler'")
-        base = dict(id_categoria=str(categoria), fecha_gasto='2026-10-01', descripcion='Alquiler de octubre')
+        base = {'id_categoria': str(categoria), 'fecha_gasto': '2026-10-01', 'descripcion': 'Alquiler de octubre'}
         self.post('/gastos/nuevo', monto='9999', forma_pago='efectivo', **base)       # más que la caja
         self.assertEqual(uno('SELECT COUNT(*) FROM gastos'), 0)
         self.post('/gastos/nuevo', monto='80', forma_pago='efectivo', **base)
@@ -499,7 +511,6 @@ class Test2Flujos(unittest.TestCase):
 
     # ---- facturación electrónica ----
     def test_70_facturacion_electronica(self):
-        import requests
         r = self.post('/facturacion/configuracion', ambiente='test', nit='1234567', razon_social='Clínica de Prueba, S.A.', usuario_digifact='USUARIO',
                       password_digifact='secreta', codigo_establecimiento='1', direccion='3a calle 4-56 zona 1', codigo_postal='01001',
                       municipio='Guatemala', departamento='Guatemala', activo='on')

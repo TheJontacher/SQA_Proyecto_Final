@@ -8,11 +8,30 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file, session, abort
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask import (
+    Flask,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+    session,
+    url_for,
+)
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -20,12 +39,37 @@ from werkzeug.utils import secure_filename
 import database
 import finanzas as fin
 from comun import (
-    D, DATABASE, a_datetime, a_local, admin_required, archivo_permitido, ahora_utc, close_db,
-    extension_de, f, fin_utc, get_db, hoy_local, inicio_utc, leer_monto, paginar_consulta, q,
-    registrar_auditoria, EXTENSIONES_IMAGEN,
+    DATABASE,
+    EXTENSIONES_IMAGEN,
+    D,
+    a_datetime,
+    a_local,
+    admin_required,
+    ahora_utc,
+    archivo_permitido,
+    close_db,
+    extension_de,
+    f,
+    fin_utc,
+    get_db,
+    hoy_local,
+    inicio_utc,
+    leer_monto,
+    paginar_consulta,
+    q,
+    registrar_auditoria,
 )
-from correo import (CorreoError, MINUTOS_VALIDEZ_CODIGO, PROPOSITO_CORREO, PROPOSITO_LOGIN, comprobar_codigo,
-                    correo_activo, email_valido, enviar_codigo, segundos_para_reenviar)
+from correo import (
+    MINUTOS_VALIDEZ_CODIGO,
+    PROPOSITO_CORREO,
+    PROPOSITO_LOGIN,
+    CorreoError,
+    comprobar_codigo,
+    correo_activo,
+    email_valido,
+    enviar_codigo,
+    segundos_para_reenviar,
+)
 from digifact import es_consumidor_final, leer_o_crear_secreto, normalize_nit
 
 # =============================================================================
@@ -385,7 +429,7 @@ def exigir_correo_registrado():
     return None
 
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
@@ -1433,7 +1477,7 @@ def _registrar_venta(db, turno):
         flash('La referencia (número de autorización o boleta) es obligatoria para este método de pago.', 'error')
         return volver
 
-    subtotal = sum(((l['precio'] - l['descuento']) * l['cantidad'] for l in lineas), Decimal('0'))
+    subtotal = sum(((l['precio'] - l['descuento']) * l['cantidad'] for l in lineas), Decimal(0))
     descuento_general = leer_monto(request.form.get('descuento_general') or '0', permitir_cero=True)
     if descuento_general is None or descuento_general > subtotal:
         flash('El descuento general no es válido (no puede ser mayor que el subtotal).', 'error')
@@ -1488,7 +1532,8 @@ def _registrar_venta(db, turno):
             db.execute("UPDATE citas SET estado = 'Completada' WHERE id = ?", (id_cita,))
         registrar_auditoria('crear_venta', 'ventas', f'Registró la venta #{id_venta} por {q(total)} ({metodo}).', db=db)
         db.commit()
-    except Exception as exc:
+    # Keep rollback and user feedback for any failure in the multi-table sale transaction.
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
         flash(f'No se registró la venta: {exc}', 'error')
         return volver
@@ -1602,7 +1647,8 @@ def cancelar_venta(id_venta):
         registrar_auditoria('cancelar_venta', 'ventas', f'Canceló la venta #{id_venta} ({q(venta["monto_total"])}). Motivo: {motivo}.{devolucion}', db=db)
         db.commit()
         flash(f'Venta #{id_venta} cancelada. El stock fue devuelto al inventario.', 'success')
-    except Exception as exc:
+    # Keep rollback and user feedback for any failure in the cancellation transaction.
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
         flash(f'Error al cancelar la venta: {exc}', 'error')
     return volver
@@ -1808,9 +1854,9 @@ def eliminar_documento_permanente(id_documento):
 # Las rutas viven en sus propios archivos para no inflar este: caja, fondo, cuentas
 # por cobrar y pagar, gastos, proveedores y reportes (rutas_dinero.py); facturación
 # electrónica con Digifact (rutas_facturacion.py).
-from rutas_dinero import bp as dinero_bp                 # noqa: E402
-from rutas_facturacion import bp as facturacion_bp       # noqa: E402
-from rutas_ia import bp as ia_bp                         # noqa: E402
+from rutas_dinero import bp as dinero_bp  # noqa: E402
+from rutas_facturacion import bp as facturacion_bp  # noqa: E402
+from rutas_ia import bp as ia_bp  # noqa: E402
 
 app.register_blueprint(dinero_bp)
 app.register_blueprint(facturacion_bp)

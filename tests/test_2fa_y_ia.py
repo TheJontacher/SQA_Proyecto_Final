@@ -9,26 +9,40 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from typing import ClassVar
 from unittest import mock
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
-TMP = tempfile.mkdtemp(prefix='clinica_test_2fa_')
+TMP = os.environ.get('CLINICA_TEST_ROOT') or tempfile.mkdtemp(prefix='clinica_test_2fa_')
+os.makedirs(TMP, exist_ok=True)
 os.environ['CLINICA_DB'] = os.path.join(TMP, 'prueba.db')
 os.environ['CLINICA_BACKUP_DIR'] = os.path.join(TMP, 'backups')
 os.environ['CLINICA_ADMIN_PASSWORD'] = 'Admin12345'
 os.environ['FISCAL_ENCRYPTION_KEY'] = 'WjtZ0ZfG4m9mS5y0y2o5l0tQ1w3e6r8t0y2u4i6o8pA='
 os.environ['SECRET_KEY'] = 'clave-de-prueba'
+os.environ.pop('DATABASE_URL', None)
 os.environ.pop('FLASK_ENV', None)
 
 import app as aplicacion  # noqa: E402
-from comun import hoy_local  # noqa: E402
+import comun  # noqa: E402
 import correo  # noqa: E402
+import database  # noqa: E402
 import rutas_ia  # noqa: E402
+from comun import hoy_local  # noqa: E402
 
 aplicacion.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
 
+_raiz_temporal = os.path.realpath(TMP)
+for _ruta in (os.environ['CLINICA_DB'], os.environ['CLINICA_BACKUP_DIR']):
+    if os.path.commonpath((_raiz_temporal, os.path.realpath(_ruta))) != _raiz_temporal:
+        raise RuntimeError(f'La ruta de prueba no es temporal: {_ruta}')
+if not (
+    database.DATABASE_NAME == comun.DATABASE == aplicacion.DATABASE == os.environ['CLINICA_DB']
+    and database.BACKUP_DIR == os.environ['CLINICA_BACKUP_DIR']
+):
+    raise RuntimeError('La aplicación y sus módulos no comparten la configuración temporal de base de datos.')
 
 PERIODO = {'desde': (hoy_local() - __import__('datetime').timedelta(days=30)).isoformat(), 'hasta': hoy_local().isoformat()}
 
@@ -311,8 +325,8 @@ class Test3ReportesIA(Base):
 
     def test_31_enviar_por_correo(self):
         with mock.patch('rutas_ia.requests.post', return_value=self.respuesta_ok()):
-            r = self.cli.post('/reportes/ia/generar', data={**PERIODO, 'enviar': 'on',
-                                                            'destinatarios': 'dueno@example.com, otro@example.com'})
+            self.cli.post('/reportes/ia/generar', data={**PERIODO, 'enviar': 'on',
+                                                        'destinatarios': 'dueno@example.com, otro@example.com'})
         self.assertEqual(self.correos.lista[-1]['a'], ['dueno@example.com', 'otro@example.com'])
         self.assertIn('Todo', self.correos.lista[-1]['texto'])
         self.assertIn('<strong', self.correos.lista[-1]['html'])
@@ -351,8 +365,8 @@ class Test3ReportesIA(Base):
 
 
 class Test4PequenoContribuyente(Base):
-    CONFIG = {'afiliacion_iva': 'PEQ', 'nit': '1234567', 'codigo_establecimiento': 1, 'tipo_frase': 1, 'escenario_frase': 1,
-              'direccion': 'Calle 1', 'codigo_postal': '01001', 'municipio': 'Guatemala', 'departamento': 'Guatemala'}
+    CONFIG: ClassVar[dict[str, str | int]] = {'afiliacion_iva': 'PEQ', 'nit': '1234567', 'codigo_establecimiento': 1, 'tipo_frase': 1, 'escenario_frase': 1,
+                                              'direccion': 'Calle 1', 'codigo_postal': '01001', 'municipio': 'Guatemala', 'departamento': 'Guatemala'}
 
     def payload(self, afiliacion, descuento=0):
         from digifact import calcular_lineas_fact, construir_payload_fact

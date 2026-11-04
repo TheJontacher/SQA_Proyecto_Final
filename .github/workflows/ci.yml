@@ -1,0 +1,275 @@
+name: Clinic SQA CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clinic-sqa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: BUILD
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install runtime and quality dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Validate Python syntax without importing the application
+        run: |
+          python - <<'PY'
+          import ast
+          import pathlib
+
+          files = sorted(pathlib.Path(".").glob("*.py"))
+          files += sorted(pathlib.Path("tests").glob("*.py"))
+          for path in files:
+              ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+          print(f"Syntax valid: {len(files)} Python files")
+          PY
+
+  test:
+    name: TEST
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install runtime and test dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run isolated suites and coverage quality gate
+        shell: bash
+        run: |
+          set +e
+          python tests/ejecutar.py --coverage > "$RUNNER_TEMP/test-output.log" 2>&1
+          status=$?
+          python - "$RUNNER_TEMP/test-output.log" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          patterns = (
+              r"^== tests\.",
+              r"^Ran \d+ tests? in ",
+              r"^OK$",
+              r"^FAILED \(",
+              r"^tests\.test_.*: ",
+              r"^TOTAL\s",
+              r"^Combined \d+ files",
+              r"^Wrote XML report",
+              r"^Wrote HTML report",
+          )
+          lines = pathlib.Path(sys.argv[1]).read_text(
+              encoding="utf-8", errors="replace"
+          ).splitlines()
+          for line in lines:
+              if any(re.search(pattern, line) for pattern in patterns):
+                  print(line)
+          counts = [
+              int(match.group(1))
+              for line in lines
+              if (match := re.search(r"^Ran (\d+) tests? in ", line))
+          ]
+          total = sum(counts)
+          print(f"Test cases executed: {total}; expected: 91")
+          if total != 91:
+              sys.exit(1)
+          PY
+          summary_status=$?
+          if [ "$summary_status" -ne 0 ]; then
+            status=$summary_status
+          fi
+          exit "$status"
+
+      - name: Upload coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+            .coverage.sqa
+          if-no-files-found: warn
+          retention-days: 7
+
+  analyze:
+    name: ANALYZE
+    needs:
+      - build
+      - test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      sonar_scan: ${{ steps.sonar-scan.outcome }}
+      sonar_gate: ${{ steps.sonar-gate.outcome }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Ruff
+        run: python -m pip install ruff==0.17.3
+
+      - name: Run Ruff and save machine-readable results
+        run: ruff check . --output-format json --output-file ruff-final.json
+
+      - name: Download consolidated coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: .
+
+      - name: Require SonarCloud configuration
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_ORGANIZATION" ] || [ -z "$SONAR_PROJECT_KEY" ]; then
+            echo "::error::Configure SONAR_TOKEN and the SONAR_ORGANIZATION / SONAR_PROJECT_KEY repository variables before running CI on main or same-repository PRs."
+            exit 1
+          fi
+
+      - name: Scan with SonarCloud
+        id: sonar-scan
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: SonarSource/sonarqube-scan-action@v8.4.1
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Verify SonarCloud Quality Gate
+        id: sonar-gate
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.1
+        with:
+          pollingTimeoutSec: 300
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Explain SonarCloud skip for fork pull requests
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: echo "::notice::SonarCloud is skipped for fork pull requests because GitHub does not expose repository secrets to fork workflows. Ruff still runs."
+
+      - name: Upload Ruff evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-report
+          path: ruff-final.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  report:
+    name: REPORT
+    needs:
+      - build
+      - test
+      - analyze
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download coverage evidence when available
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: evidence/coverage
+
+      - name: Download Ruff evidence when available
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ruff-report
+          path: evidence/ruff
+
+      - name: Write pipeline summary
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          ANALYZE_RESULT: ${{ needs.analyze.result }}
+          SONAR_SCAN_RESULT: ${{ needs.analyze.outputs.sonar_scan }}
+          SONAR_GATE_RESULT: ${{ needs.analyze.outputs.sonar_gate }}
+        run: |
+          {
+            echo "# Clinic SQA CI"
+            echo
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| BUILD | ${BUILD_RESULT} |"
+            echo "| TEST | ${TEST_RESULT} |"
+            echo "| ANALYZE (Ruff + SonarCloud) | ${ANALYZE_RESULT} |"
+            echo "| SonarCloud scan | ${SONAR_SCAN_RESULT:-not run} |"
+            echo "| SonarCloud Quality Gate | ${SONAR_GATE_RESULT:-not run} |"
+            echo
+            echo "TEST runs \`tests/ejecutar.py --coverage\`, which uses isolated processes and temporary SQLite databases, produces \`coverage.xml\` and \`htmlcov/\`, and enforces 60% minimum line coverage."
+            echo "Only coverage and Ruff reports are uploaded; database, backups, uploads, instance data, and test logs are not included."
+          } | tee ci-summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload pipeline summary and safe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary
+          path: |
+            ci-summary.md
+            evidence/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Fail if a required job failed or was skipped
+        if: always()
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          ANALYZE_RESULT: ${{ needs.analyze.result }}
+        run: |
+          if [ "$BUILD_RESULT" != "success" ] || [ "$TEST_RESULT" != "success" ] || [ "$ANALYZE_RESULT" != "success" ]; then
+            echo "::error::At least one required CI job did not succeed."
+            exit 1
+          fi

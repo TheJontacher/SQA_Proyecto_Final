@@ -1,0 +1,35 @@
+[run]
+branch = False
+source =
+    app
+    database
+    comun
+    finanzas
+    correo
+    digifact
+    rutas_dinero
+    rutas_facturacion
+    rutas_ia
+data_file = .coverage.sqa
+omit =
+    */tests/*
+    tests/*
+    */.venv/*
+    */venv/*
+    */backups/*
+    */temp/*
+    */tmp/*
+    */corregir_ventas_pasadas.py
+    */migrate_sqlite_to_postgres.py
+
+[report]
+omit =
+    */tests/*
+    tests/*
+    */.venv/*
+    */venv/*
+    */backups/*
+    */temp/*
+    */tmp/*
+    */corregir_ventas_pasadas.py
+    */migrate_sqlite_to_postgres.py

@@ -17,3 +17,8 @@ backups/
 *.respaldo_seguridad
 *.deb
 *.log
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+ruff-final.json

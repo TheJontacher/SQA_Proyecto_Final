@@ -11,9 +11,29 @@ from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 import finanzas as fin
-from comun import (CENTAVO, D, a_local, admin_required, ahora_utc, contexto_fechas, dia_local_sql,
-                   extension_de, f, fecha_o, fin_utc, get_db, hoy_local, inicio_utc, leer_monto, paginar_consulta,
-                   paginar_lista, q, rango_fechas, registrar_auditoria, respuesta_csv)
+from comun import (
+    CENTAVO,
+    D,
+    a_local,
+    admin_required,
+    ahora_utc,
+    contexto_fechas,
+    dia_local_sql,
+    extension_de,
+    f,
+    fecha_o,
+    fin_utc,
+    get_db,
+    hoy_local,
+    inicio_utc,
+    leer_monto,
+    paginar_consulta,
+    paginar_lista,
+    q,
+    rango_fechas,
+    registrar_auditoria,
+    respuesta_csv,
+)
 from digifact import es_consumidor_final, normalize_nit
 
 bp = Blueprint('dinero', __name__)
@@ -64,7 +84,7 @@ def movimientos_del_turno(db, turno):
                       'entrada': m['tipo'] in fin.CAJA_INGRESOS, 'afecta_efectivo': True, 'anulada': False,
                       'usuario': m['usuario'] or ''})
 
-    por_medio = {'efectivo': Decimal('0'), 'tarjeta': Decimal('0'), 'banco': Decimal('0'), 'credito': Decimal('0')}
+    por_medio = {'efectivo': Decimal(0), 'tarjeta': Decimal(0), 'banco': Decimal(0), 'credito': Decimal(0)}
     # Ventas del turno: las de tarjeta, transferencia o crédito quedan registradas aunque no muevan el efectivo.
     for v in db.execute("""SELECT v.*, p.nombre, p.apellido, u.nombre AS usuario FROM ventas v
                            LEFT JOIN pacientes p ON p.id = v.id_paciente LEFT JOIN usuarios u ON u.id = v.id_usuario
@@ -300,7 +320,7 @@ def fondo():
     marcas = ','.join('?' * len(fin.FONDO_ENTRADAS))
     corriente = D(db.execute(f"SELECT COALESCE(SUM(CASE WHEN tipo IN ({marcas}) THEN monto ELSE -monto END), 0) FROM movimientos_fondo WHERE cuenta = ? AND creado_en < ?",
                              (*fin.FONDO_ENTRADAS, cuenta, ini)).fetchone()[0])
-    filas, entradas, salidas = [], Decimal('0'), Decimal('0')
+    filas, entradas, salidas = [], Decimal(0), Decimal(0)
     for m in db.execute("""SELECT m.*, u.nombre AS usuario FROM movimientos_fondo m LEFT JOIN usuarios u ON u.id = m.id_usuario
                            WHERE m.cuenta = ? AND m.creado_en BETWEEN ? AND ? ORDER BY m.creado_en, m.id""", (cuenta, ini, fin_dt)):
         es_entrada = m['tipo'] in fin.FONDO_ENTRADAS
@@ -552,7 +572,7 @@ def cxc_anular(id_cuenta):
 def proveedores_lista():
     db = get_db()
     ver_inactivos = request.args.get('inactivos') == '1'
-    proveedores = db.execute(f"""SELECT p.*, COALESCE((SELECT SUM(saldo_pendiente) FROM cuentas_por_pagar c
+    proveedores = db.execute("""SELECT p.*, COALESCE((SELECT SUM(saldo_pendiente) FROM cuentas_por_pagar c
                                                        WHERE c.id_proveedor = p.id AND c.estado IN ('Pendiente','Parcial')), 0) AS debe
                                  FROM proveedores p WHERE p.activo = ? ORDER BY p.nombre""", (0 if ver_inactivos else 1,)).fetchall()
     return render_template('proveedores/lista.html', active_page='proveedores', proveedores=proveedores, ver_inactivos=ver_inactivos)
@@ -1089,7 +1109,7 @@ def reporte_ventas():
         f"""SELECT i.nombre, SUM(vd.cantidad), SUM((vd.precio_unitario - vd.descuento) * vd.cantidad), i.tipo
             FROM ventas_detalle vd JOIN ventas v ON v.id = vd.id_venta JOIN inventario i ON i.id = vd.id_item_inventario
             WHERE {cond} GROUP BY i.id ORDER BY 2 DESC LIMIT 10""", params)]
-    maximo = max((t for _, _, t in por_dia), default=Decimal('0'))
+    maximo = max((t for _, _, t in por_dia), default=Decimal(0))
     por_dia = [(d, c, t, float(t / maximo * 100) if maximo else 0) for d, c, t in por_dia]
 
     if request.args.get('export') == 'csv':
@@ -1129,8 +1149,8 @@ def reporte_productos():
                              [(a['nombre'], a['tipo'], a['unidades'], f"{a['ingreso']:.2f}", f"{a['costo']:.2f}", f"{a['utilidad']:.2f}",
                                f"{a['margen']:.1f}" if a['margen'] is not None else '') for a in articulos])
     return render_template('reportes/productos.html', active_page='reportes', desde=desde, hasta=hasta, articulos=articulos, orden=orden,
-                           sin_ventas=sin_ventas, total_ingreso=sum((a['ingreso'] for a in articulos), Decimal('0')),
-                           total_utilidad=sum((a['utilidad'] for a in articulos), Decimal('0')), **contexto_fechas('dinero.reporte_productos'))
+                           sin_ventas=sin_ventas, total_ingreso=sum((a['ingreso'] for a in articulos), Decimal(0)),
+                           total_utilidad=sum((a['utilidad'] for a in articulos), Decimal(0)), **contexto_fechas('dinero.reporte_productos'))
 
 
 @bp.route('/reportes/inventario')
@@ -1232,8 +1252,8 @@ def reporte_libro():
                                etiquetas.get(m['tipo'], m['tipo']), m['concepto'], m['naturaleza'] or '', m['usuario'],
                                f"{m['monto']:.2f}" if m['entrada'] else '', '' if m['entrada'] else f"{m['monto']:.2f}", m['referencia']) for m in movs])
     pagina, pag = paginar_lista(movs, 50)
-    entradas = sum((m['monto'] for m in movs if m['entrada'] and m['tipo'] not in fin.FLUJO_INTERNOS), Decimal('0'))
-    salidas = sum((m['monto'] for m in movs if not m['entrada'] and m['tipo'] not in fin.FLUJO_INTERNOS), Decimal('0'))
+    entradas = sum((m['monto'] for m in movs if m['entrada'] and m['tipo'] not in fin.FLUJO_INTERNOS), Decimal(0))
+    salidas = sum((m['monto'] for m in movs if not m['entrada'] and m['tipo'] not in fin.FLUJO_INTERNOS), Decimal(0))
     return render_template('reportes/libro.html', active_page='reportes', desde=desde, hasta=hasta, cuenta=cuenta, movs=pagina, pag=pag,
                            etiquetas=etiquetas, nombres_cuenta=nombres_cuenta, entradas=entradas, salidas=salidas, internos=fin.FLUJO_INTERNOS,
                            total=len(movs), naturalezas={**fin.NATURALEZAS_INGRESO, **fin.NATURALEZAS_EGRESO}, **contexto_fechas('dinero.reporte_libro'))

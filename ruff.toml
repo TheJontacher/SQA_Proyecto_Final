@@ -1,0 +1,38 @@
+target-version = "py312"
+line-length = 100
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "instance",
+    "uploads",
+    "backups",
+    "htmlcov",
+]
+
+[lint]
+select = [
+    "BLE001",
+    "C408",
+    "E402",
+    "F401",
+    "F541",
+    "F841",
+    "FURB157",
+    "FURB188",
+    "I001",
+    "PIE810",
+    "RUF012",
+    "RUF059",
+    "RUF100",
+    "SIM102",
+    "SIM114",
+    "SIM118",
+    "UP006",
+    "UP017",
+    "UP031",
+    "UP035",
+]

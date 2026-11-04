@@ -9,11 +9,33 @@ from flask import Blueprint, Response, abort, flash, redirect, render_template, 
 from flask_login import current_user, login_required
 
 import database
-from comun import (D, ZONA_HORARIA_HORAS, a_local, admin_required, ahora_utc, f, get_db, paginar_consulta, q,
-                   registrar_auditoria)
-from digifact import (DIGIFACT_BASE_URLS, REGIMENES, Cifrador, DigifactError, calcular_lineas_fact, cargar_clave_fiscal,
-                      construir_payload_fact, crear_cliente, es_consumidor_final, normalize_nit, pad_nit, separar_nombre,
-                      validar_direccion_fiscal)
+from comun import (
+    ZONA_HORARIA_HORAS,
+    D,
+    a_local,
+    admin_required,
+    ahora_utc,
+    f,
+    get_db,
+    paginar_consulta,
+    q,
+    registrar_auditoria,
+)
+from digifact import (
+    DIGIFACT_BASE_URLS,
+    REGIMENES,
+    Cifrador,
+    DigifactError,
+    calcular_lineas_fact,
+    cargar_clave_fiscal,
+    construir_payload_fact,
+    crear_cliente,
+    es_consumidor_final,
+    normalize_nit,
+    pad_nit,
+    separar_nombre,
+    validar_direccion_fiscal,
+)
 
 bp = Blueprint('facturacion', __name__)
 
@@ -101,7 +123,7 @@ def configuracion():
 
         prefijo = f'GT.{pad_nit(nit)}.'
         usuario = form['usuario_digifact'].strip()
-        usuario = usuario[len(prefijo):] if usuario.startswith(prefijo) else usuario
+        usuario = usuario.removeprefix(prefijo)
         datos = {
             'ambiente': ambiente, 'nit': nit, 'razon_social': form['razon_social'].strip()[:200],
             'nombre_comercial': form.get('nombre_comercial', '').strip()[:200] or None, 'usuario_digifact': usuario,

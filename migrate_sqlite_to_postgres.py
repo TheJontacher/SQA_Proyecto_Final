@@ -13,7 +13,6 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
 
 try:
     import psycopg2
@@ -33,14 +32,14 @@ def quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def sqlite_tables(conn: sqlite3.Connection) -> List[str]:
+def sqlite_tables(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
     ).fetchall()
     return [row[0] for row in rows]
 
 
-def sqlite_table_order(conn: sqlite3.Connection) -> List[str]:
+def sqlite_table_order(conn: sqlite3.Connection) -> list[str]:
     tables = sqlite_tables(conn)
     if not tables:
         return []
@@ -77,7 +76,7 @@ def sqlite_table_order(conn: sqlite3.Connection) -> List[str]:
 
 def column_type_sqlite_to_postgres(sqlite_type: str) -> str:
     t = (sqlite_type or "TEXT").upper()
-    if t.startswith("INTEGER") or t.startswith("INT"):
+    if t.startswith(("INTEGER", "INT")):
         return "BIGINT"
     if "REAL" in t or "FLOAT" in t or "DOUBLE" in t:
         return "DOUBLE PRECISION"
@@ -125,7 +124,7 @@ def build_create_table_sqlite(conn: sqlite3.Connection, table_name: str) -> str:
     columns_sql = []
     pk_columns = []
     for col in info_rows:
-        cid, name, data_type, notnull, default_value, pk = col
+        _, name, data_type, notnull, default_value, pk = col
         postgres_type = column_type_sqlite_to_postgres(data_type or "TEXT")
         col_name = quote_ident(name)
 
@@ -167,7 +166,7 @@ def build_create_table_sqlite(conn: sqlite3.Connection, table_name: str) -> str:
     fk_sql = []
     seen = set()
     for fk in fk_rows:
-        id_, seq, table, from_col, to_col, on_update, on_delete, match = fk
+        _, _, table, from_col, to_col, on_update, on_delete, _ = fk
         key = (table, from_col, to_col)
         if key in seen:
             continue
@@ -251,9 +250,7 @@ def migrate_sqlite_to_postgres(sqlite_path: str, postgres_url: str, dry_run: boo
                 for row in rows:
                     clean_row = []
                     for value, sqlite_type in zip(row, column_types):
-                        if value is None:
-                            clean_row.append(None)
-                        elif (
+                        if value is None or (
                             isinstance(value, str)
                             and value.strip() == ''
                             and any(token in (sqlite_type or '').upper() for token in (
@@ -303,7 +300,7 @@ def sequence_needs_advance(last_value: int, is_called: bool, max_id: int | None)
     return next_id <= max_id
 
 
-def synchronize_postgres_sequences(postgres_url: str) -> List[str]:
+def synchronize_postgres_sequences(postgres_url: str) -> list[str]:
     if psycopg2 is None or pg_sql is None:
         raise RuntimeError("psycopg2 is required. Install it with: pip install psycopg2-binary")
     if not postgres_url:
@@ -385,7 +382,7 @@ def main() -> int:
         else:
             migrate_sqlite_to_postgres(args.sqlite_db, args.postgres_url, dry_run=args.dry_run, schema_only=args.schema_only)
         return 0
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:  # pragma: no cover  # noqa: BLE001
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 

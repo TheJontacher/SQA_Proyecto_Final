@@ -20,7 +20,7 @@ import re
 import time
 import uuid
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -313,11 +313,11 @@ def calcular_lineas_fact(lineas, descuento_global, con_iva=True):
         desc_linea = (qty * Decimal(str(ln.get('unit_discount') or 0))).quantize(centavo, rounding=ROUND_HALF_UP)
         calculadas.append({'ln': ln, 'qty': qty, 'precio': precio, 'bruto': bruto,
                            'desc_linea': desc_linea, 'neto': bruto - desc_linea})
-    base = sum((c['neto'] for c in calculadas), Decimal('0'))
+    base = sum((c['neto'] for c in calculadas), Decimal(0))
     if descuento_global < 0 or descuento_global > base:
         raise ValueError('El descuento general no puede ser mayor que el subtotal')
 
-    asignado = Decimal('0')
+    asignado = Decimal(0)
     resultado = []
     n = len(calculadas)
     for idx, c in enumerate(calculadas):
@@ -327,7 +327,7 @@ def calcular_lineas_fact(lineas, descuento_global, con_iva=True):
             parte = (descuento_global * c['neto'] / base).quantize(centavo, rounding=ROUND_HALF_UP)
             parte = min(parte, descuento_global - asignado)   # el redondeo nunca reparte de más
         else:
-            parte = Decimal('0')
+            parte = Decimal(0)
         asignado += parte
         total_item = c['bruto'] - c['desc_linea'] - parte
         if total_item < 0:
@@ -336,7 +336,7 @@ def calcular_lineas_fact(lineas, descuento_global, con_iva=True):
         resultado.append({
             'description': c['ln']['description'], 'unit': c['ln'].get('unit'), 'servicio': bool(c['ln'].get('servicio')),
             'qty': c['qty'], 'unit_price': c['precio'], 'discount_amount': c['desc_linea'] + parte,
-            'taxable_amount': base_imponible, 'tax_amount': (total_item - base_imponible) if con_iva else Decimal('0'), 'total_item': total_item,
+            'taxable_amount': base_imponible, 'tax_amount': (total_item - base_imponible) if con_iva else Decimal(0), 'total_item': total_item,
         })
     return resultado, base - descuento_global
 

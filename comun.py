@@ -4,8 +4,8 @@ import csv
 import io
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from functools import wraps
 
 from flask import Response, flash, g, redirect, request, url_for
@@ -48,7 +48,7 @@ def close_db(exception=None):
 # =============================================================================
 
 def ahora_utc():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def hoy_local():

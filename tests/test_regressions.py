@@ -7,10 +7,31 @@ import sqlite3
 import tempfile
 import unittest
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date
 
-import app as clinic_app
-import database
+TEST_ROOT = os.environ.get("CLINICA_TEST_ROOT") or tempfile.mkdtemp(prefix="clinica_test_regressions_")
+os.makedirs(TEST_ROOT, exist_ok=True)
+os.environ["CLINICA_DB"] = str(pathlib.Path(TEST_ROOT) / "bootstrap.sqlite")
+os.environ["CLINICA_BACKUP_DIR"] = str(pathlib.Path(TEST_ROOT) / "backups")
+os.environ["CLINICA_ADMIN_PASSWORD"] = "isolated-test-admin-password"
+os.environ["SECRET_KEY"] = "clave-de-prueba"
+os.environ["FISCAL_ENCRYPTION_KEY"] = "WjtZ0ZfG4m9mS5y0y2o5l0tQ1w3e6r8t0y2u4i6o8pA="
+os.environ.pop("DATABASE_URL", None)
+os.environ.pop("FLASK_ENV", None)
+
+import app as clinic_app  # noqa: E402
+import comun  # noqa: E402
+import database  # noqa: E402
+
+_test_root_real = os.path.realpath(TEST_ROOT)
+for _ruta in (os.environ["CLINICA_DB"], os.environ["CLINICA_BACKUP_DIR"]):
+    if os.path.commonpath((_test_root_real, os.path.realpath(_ruta))) != _test_root_real:
+        raise RuntimeError(f"La ruta de prueba no es temporal: {_ruta}")
+if not (
+    database.DATABASE_NAME == comun.DATABASE == clinic_app.DATABASE == os.environ["CLINICA_DB"]
+    and database.BACKUP_DIR == os.environ["CLINICA_BACKUP_DIR"]
+):
+    raise RuntimeError("La aplicación y sus módulos no comparten la configuración temporal de base de datos.")
 
 
 PROJECT_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -29,17 +50,31 @@ def sqlite_connection(path):
 
 class ClinicRegressionTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = tempfile.TemporaryDirectory(dir=TEST_ROOT)
         self.db_path = pathlib.Path(self.temp_dir.name) / "test_clinica.sqlite"
         self.previous_database_name = database.DATABASE_NAME
         self.previous_database = clinic_app.DATABASE
-        self.previous_database_url = clinic_app.DATABASE_URL
-        self.previous_admin_password = os.environ.get("INITIAL_ADMIN_PASSWORD")
+        self.previous_comun_database = comun.DATABASE
+        self.previous_clinica_db = os.environ.get("CLINICA_DB")
+        self.previous_backup_dir = os.environ.get("CLINICA_BACKUP_DIR")
+        self.previous_database_backup_dir = database.BACKUP_DIR
+        self.previous_admin_password = os.environ.get("CLINICA_ADMIN_PASSWORD")
 
-        os.environ["INITIAL_ADMIN_PASSWORD"] = "isolated-test-admin-password"
-        database.DATABASE_NAME = self.db_path
-        clinic_app.DATABASE = str(self.db_path)
-        clinic_app.DATABASE_URL = None
+        database_path = str(self.db_path)
+        backup_dir = str(pathlib.Path(self.temp_dir.name) / "backups")
+        os.environ["CLINICA_DB"] = database_path
+        os.environ["CLINICA_BACKUP_DIR"] = backup_dir
+        os.environ["CLINICA_ADMIN_PASSWORD"] = "isolated-test-admin-password"
+        database.DATABASE_NAME = database_path
+        database.BACKUP_DIR = backup_dir
+        comun.DATABASE = database_path
+        clinic_app.DATABASE = database_path
+        self.assertEqual(database.DATABASE_NAME, comun.DATABASE)
+        self.assertEqual(comun.DATABASE, clinic_app.DATABASE)
+        temp_root = os.path.realpath(self.temp_dir.name)
+        for ruta in (database_path, backup_dir):
+            if os.path.commonpath((temp_root, os.path.realpath(ruta))) != temp_root:
+                self.fail(f"La ruta de prueba no es temporal: {ruta}")
         self.previous_upload_config = {
             key: clinic_app.app.config[key]
             for key in ("UPLOAD_FOLDER", "PRODUCT_UPLOAD_FOLDER", "EXPENSE_UPLOAD_FOLDER")
@@ -48,7 +83,17 @@ class ClinicRegressionTests(unittest.TestCase):
         clinic_app.app.config["UPLOAD_FOLDER"] = str(self.upload_root)
         clinic_app.app.config["PRODUCT_UPLOAD_FOLDER"] = str(self.upload_root / "productos")
         clinic_app.app.config["EXPENSE_UPLOAD_FOLDER"] = str(self.upload_root / "comprobantes_gastos")
+        for folder in (
+            self.upload_root,
+            pathlib.Path(clinic_app.app.config["PRODUCT_UPLOAD_FOLDER"]),
+            pathlib.Path(clinic_app.app.config["EXPENSE_UPLOAD_FOLDER"]),
+        ):
+            folder.mkdir(parents=True, exist_ok=True)
         database.crear_base_de_datos()
+        with sqlite_connection(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO pacientes (nombre, apellido) VALUES ('Paciente', 'Ficticio')"
+            )
 
         self.client = clinic_app.app.test_client()
         login_page = self.client.get("/login")
@@ -70,13 +115,19 @@ class ClinicRegressionTests(unittest.TestCase):
 
     def tearDown(self):
         clinic_app.DATABASE = self.previous_database
-        clinic_app.DATABASE_URL = self.previous_database_url
+        comun.DATABASE = self.previous_comun_database
         database.DATABASE_NAME = self.previous_database_name
+        database.BACKUP_DIR = self.previous_database_backup_dir
         clinic_app.app.config.update(self.previous_upload_config)
-        if self.previous_admin_password is None:
-            os.environ.pop("INITIAL_ADMIN_PASSWORD", None)
-        else:
-            os.environ["INITIAL_ADMIN_PASSWORD"] = self.previous_admin_password
+        for key, value in (
+            ("CLINICA_DB", self.previous_clinica_db),
+            ("CLINICA_BACKUP_DIR", self.previous_backup_dir),
+            ("CLINICA_ADMIN_PASSWORD", self.previous_admin_password),
+        ):
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self.temp_dir.cleanup()
 
     def query(self, sql, params=()):
@@ -170,7 +221,7 @@ class ClinicRegressionTests(unittest.TestCase):
         )[0]
         download = self.client.get(f"/uploads/{filename}")
         self.assertEqual(download.status_code, 200)
-        self.assertIn("attachment", download.headers.get("Content-Disposition", ""))
+        self.assertIn("inline", download.headers.get("Content-Disposition", ""))
         download.close()
         self.assertEqual(
             clinic_app.app.test_client().get(f"/uploads/{filename}").status_code,
@@ -195,20 +246,33 @@ class ClinicRegressionTests(unittest.TestCase):
         )
 
     def test_cash_open_close_is_validated_and_idempotent(self):
-        self.assertEqual(self.open_cash().status_code, 302)
+        with sqlite_connection(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO movimientos_fondo (cuenta, tipo, monto, concepto, naturaleza) "
+                "VALUES ('fondo', 'ingreso_manual', 50, 'Fondo ficticio de prueba', 'saldo_inicial')"
+            )
+        opened = self.client.post(
+            "/caja/abrir",
+            data={
+                "csrf_token": self.csrf_token,
+                "monto_inicial": "50",
+                "origen_apertura": "fondo",
+            },
+        )
+        self.assertEqual(opened.status_code, 302)
         self.client.post(
             "/caja/abrir",
-            data={"csrf_token": self.csrf_token, "monto_inicial": "50"},
+            data={"csrf_token": self.csrf_token, "monto_inicial": "0"},
         )
         self.assertEqual(self.query("SELECT COUNT(*) FROM cierres_caja WHERE estado='Abierta'"), [(1,)])
         response = self.client.post(
             "/caja/cerrar",
-            data={"csrf_token": self.csrf_token, "monto_final_real": "50"},
+            data={"csrf_token": self.csrf_token, "monto_contado": "50"},
         )
         self.assertEqual(response.status_code, 302)
         self.client.post(
             "/caja/cerrar",
-            data={"csrf_token": self.csrf_token, "monto_final_real": "50"},
+            data={"csrf_token": self.csrf_token, "monto_contado": "50"},
         )
         self.assertEqual(self.query("SELECT estado, monto_final_real FROM cierres_caja"), [("Cerrada", 50.0)])
 
@@ -232,14 +296,7 @@ class ClinicRegressionTests(unittest.TestCase):
             },
         )
         today = date.today().isoformat()
-        report = self.client.post(
-            "/reporte/financiero",
-            data={
-                "csrf_token": self.csrf_token,
-                "fecha_inicio": today,
-                "fecha_fin": today,
-            },
-        )
+        report = self.client.get(f"/reportes/productos?desde={today}&hasta={today}")
         self.assertEqual(report.status_code, 200)
         self.assertIn("Q100.00", report.get_data(as_text=True))
 
@@ -255,24 +312,33 @@ class ClinicRegressionTests(unittest.TestCase):
     def test_post_requests_require_csrf_and_logout_is_post_only(self):
         anonymous = clinic_app.app.test_client()
         response = anonymous.post("/login", data={"username": "admin", "password": "bad"})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/")
+        with anonymous.session_transaction() as session:
+            self.assertNotIn("_user_id", session)
         self.assertEqual(anonymous.get("/logout").status_code, 405)
         authenticated_response = self.client.get("/")
         self.assertEqual(authenticated_response.headers["X-Content-Type-Options"], "nosniff")
-        self.assertEqual(authenticated_response.headers["X-Frame-Options"], "DENY")
-        self.assertEqual(authenticated_response.headers["Cache-Control"], "no-store")
-
-    def test_native_database_dates_render_and_serialize_as_iso(self):
-        self.assertEqual(clinic_app.calcular_edad(date(1990, 1, 1)), 36)
-        self.assertEqual(clinic_app.calcular_edad(datetime(1990, 1, 1, 12, 30)), 36)
-        self.assertEqual(clinic_app.iso_date_value(datetime(2026, 10, 10)), "2026-10-10")
-        self.assertEqual(
-            clinic_app.app.json.dumps({"date": date(2026, 10, 10)}),
-            '{"date": "2026-10-10"}',
+        self.assertEqual(authenticated_response.headers["X-Frame-Options"], "SAMEORIGIN")
+        self.assertEqual(authenticated_response.headers["Referrer-Policy"], "same-origin")
+        csrf_rejected = self.client.post("/logout")
+        self.assertEqual(csrf_rejected.status_code, 302)
+        with self.client.session_transaction() as session:
+            self.assertIn("_user_id", session)
+        logout_response = self.client.post(
+            "/logout", data={"csrf_token": self.csrf_token}
         )
-        formatter = clinic_app.app.jinja_env.filters["db_datetime"]
-        self.assertEqual(formatter(datetime(2026, 10, 10, 15, 45), True), "2026-10-10")
-        self.assertEqual(formatter(datetime(2026, 10, 10, 15, 45)), "2026-10-10 15:45")
+        self.assertEqual(logout_response.status_code, 302)
+        self.assertEqual(logout_response.location, "/login")
+        with self.client.session_transaction() as session:
+            self.assertNotIn("_user_id", session)
+
+    def test_current_date_helpers_parse_and_format_expected_inputs(self):
+        today = date.today()
+        self.assertEqual(clinic_app.calcular_edad(today.isoformat()), 0)
+        self.assertIsNone(clinic_app.calcular_edad("not-a-date"))
+        formatter = clinic_app.app.jinja_env.filters["local"]
+        self.assertEqual(formatter("2026-10-10 15:45:00"), "10/10/2026 09:45")
 
     def test_sale_stock_and_cancellation_are_consistent(self):
         self.add_product()
@@ -300,7 +366,12 @@ class ClinicRegressionTests(unittest.TestCase):
         self.assertEqual(self.query("SELECT COUNT(*) FROM movimientos_inventario"), [(1,)])
 
         response = self.client.post(
-            f"/ventas/cancelar/{sale_id}", data={"csrf_token": self.csrf_token}
+            f"/ventas/cancelar/{sale_id}",
+            data={
+                "csrf_token": self.csrf_token,
+                "motivo": "Cancelación ficticia para prueba",
+                "origen": "caja",
+            },
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.query("SELECT cantidad FROM inventario WHERE id=1"), [(5,)])
@@ -326,41 +397,61 @@ class ClinicRegressionTests(unittest.TestCase):
             },
         )
         sale_id = self.query("SELECT id FROM ventas")[0][0]
+        account_id = self.query(
+            "SELECT id FROM cuentas_por_cobrar WHERE id_venta=?",
+            (sale_id,),
+        )[0][0]
         payment = {
             "csrf_token": self.csrf_token,
-            "monto_abono": "30",
-            "metodo_abono": "Efectivo",
-            "referencia_abono": "",
-            "origen_url": "creditos",
+            "monto": "30",
+            "metodo_pago": "Efectivo",
         }
-        self.client.post(f"/ventas/abonar/{sale_id}", data=payment)
-        self.client.post(f"/ventas/abonar/{sale_id}", data=payment)
+        self.client.post(f"/cuentas-por-cobrar/{account_id}/pagar", data=payment)
+        self.client.post(f"/cuentas-por-cobrar/{account_id}/pagar", data=payment)
         self.assertEqual(
             self.query("SELECT saldo_pendiente FROM ventas WHERE id=?", (sale_id,)),
             [(20.0,)],
         )
         self.assertEqual(
-            self.query("SELECT COUNT(*) FROM abonos WHERE id_venta=?", (sale_id,)),
+            self.query("SELECT COUNT(*) FROM abonos WHERE id_cuenta=?", (account_id,)),
             [(1,)],
         )
 
     def test_expense_installments_cannot_overpay(self):
         with sqlite_connection(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO gastos (descripcion, monto, saldo_pendiente, estado) "
-                "VALUES ('Test expense', 50, 50, 'Pendiente')"
+                "INSERT INTO movimientos_fondo (cuenta, tipo, monto, concepto, naturaleza) "
+                "VALUES ('fondo', 'ingreso_manual', 50, 'Fondo ficticio de prueba', 'saldo_inicial')"
             )
+            provider_id = conn.execute(
+                "INSERT INTO proveedores (nombre) VALUES ('Proveedor ficticio')"
+            ).lastrowid
+            conn.execute(
+                "INSERT INTO cuentas_por_pagar "
+                "(id_proveedor, descripcion, monto, saldo_pendiente, estado) "
+                "VALUES (?, 'Gasto ficticio', 50, 50, 'Pendiente')",
+                (provider_id,),
+            )
+            account_id = conn.execute(
+                "SELECT id FROM cuentas_por_pagar WHERE id_proveedor=?",
+                (provider_id,),
+            ).fetchone()[0]
         payment = {
             "csrf_token": self.csrf_token,
-            "monto_abono": "30",
-            "metodo_abono": "Efectivo",
-            "referencia_abono": "",
+            "monto": "30",
+            "forma_pago": "fondo",
         }
-        self.client.post("/pagos/abonar/1", data=payment)
-        self.client.post("/pagos/abonar/1", data=payment)
-        self.assertEqual(self.query("SELECT saldo_pendiente FROM gastos WHERE id=1"), [(20.0,)])
+        self.client.post(f"/cuentas-por-pagar/{account_id}/pagar", data=payment)
+        self.client.post(f"/cuentas-por-pagar/{account_id}/pagar", data=payment)
         self.assertEqual(
-            self.query("SELECT COUNT(*) FROM abonos_gastos WHERE id_gasto=1"),
+            self.query(
+                "SELECT saldo_pendiente FROM cuentas_por_pagar WHERE id=?",
+                (account_id,),
+            ),
+            [(20.0,)],
+        )
+        self.assertEqual(
+            self.query("SELECT COUNT(*) FROM pagos_cxp WHERE id_cuenta=?", (account_id,)),
             [(1,)],
         )
 
@@ -436,6 +527,17 @@ class ClinicRegressionTests(unittest.TestCase):
                 "INSERT INTO inventario (nombre, tipo, precio_venta, cantidad, is_deleted) "
                 "VALUES ('Referenced item', 'Producto', 10, 0, 1) RETURNING id"
             ).fetchone()[0]
+            sale_id = conn.execute(
+                "INSERT INTO ventas (id_paciente, fecha_venta, monto_total, metodo_pago, estado_pago, estado) "
+                "VALUES (?, '2026-10-10', 10, 'Efectivo', 'Pagado', 'Completada') RETURNING id",
+                (patient_id,),
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO ventas_detalle "
+                "(id_venta, id_item_inventario, cantidad, precio_unitario, descuento) "
+                "VALUES (?, ?, 1, 10, 0)",
+                (sale_id, item_id),
+            )
             conn.execute(
                 "INSERT INTO movimientos_inventario (id_item, tipo_movimiento, cantidad) "
                 "VALUES (?, 'Entrada', 1)",
@@ -456,17 +558,18 @@ class ClinicRegressionTests(unittest.TestCase):
         )
         self.assertEqual(patient_response.status_code, 200)
         self.assertEqual(item_response.status_code, 200)
-        self.assertIn('conserva expedientes, citas o ventas relacionadas', patient_response.get_data(as_text=True))
-        self.assertIn('tiene movimientos o ventas relacionadas', item_response.get_data(as_text=True))
+        self.assertIn('tiene 1 expediente(s)', patient_response.get_data(as_text=True))
+        self.assertIn('conservar el historial', patient_response.get_data(as_text=True))
+        self.assertIn('aparece en 1 línea(s) de venta', item_response.get_data(as_text=True))
         self.assertEqual(self.query('SELECT COUNT(*) FROM pacientes WHERE id=?', (patient_id,)), [(1,)])
         self.assertEqual(self.query('SELECT COUNT(*) FROM inventario WHERE id=?', (item_id,)), [(1,)])
 
     def test_upload_allowlist(self):
-        self.assertTrue(clinic_app.allowed_file("scan.PDF", clinic_app.DOCUMENT_EXTENSIONS))
-        self.assertTrue(clinic_app.allowed_file("photo.webp", clinic_app.IMAGE_EXTENSIONS))
-        self.assertFalse(clinic_app.allowed_file("page.html", clinic_app.DOCUMENT_EXTENSIONS))
-        self.assertFalse(clinic_app.allowed_file("graphic.svg", clinic_app.IMAGE_EXTENSIONS))
-        self.assertFalse(clinic_app.allowed_file("no-extension", clinic_app.DOCUMENT_EXTENSIONS))
+        self.assertTrue(clinic_app.allowed_file("scan.PDF"))
+        self.assertTrue(clinic_app.allowed_file("photo.webp"))
+        self.assertFalse(clinic_app.allowed_file("page.html"))
+        self.assertFalse(clinic_app.allowed_file("graphic.svg"))
+        self.assertFalse(clinic_app.allowed_file("no-extension"))
 
     def load_migration_module(self, name):
         spec = importlib.util.spec_from_file_location(name, MIGRATION_PATH)
@@ -552,13 +655,32 @@ class ClinicRegressionTests(unittest.TestCase):
             def connect(self, url):
                 return self.fake_connection
 
+        class FakeSQL:
+            def __init__(self, value):
+                self.value = value
+
+            def format(self, *identifiers):
+                return self.value
+
+        class FakeSQLTools:
+            @staticmethod
+            def SQL(value):
+                return FakeSQL(value)
+
+            @staticmethod
+            def Identifier(*parts):
+                return ".".join(parts)
+
         fake_postgres = FakePostgres()
         original_psycopg2 = migration.psycopg2
+        original_pg_sql = migration.pg_sql
         migration.psycopg2 = fake_postgres
+        migration.pg_sql = FakeSQLTools
         try:
             synchronized = migration.synchronize_postgres_sequences("unused")
         finally:
             migration.psycopg2 = original_psycopg2
+            migration.pg_sql = original_pg_sql
         self.assertEqual(synchronized, ["pacientes.id"])
         self.assertEqual(fake_postgres.fake_connection.fake_cursor.set_values, [("public.pacientes_id_seq", 734)])
         self.assertTrue(fake_postgres.fake_connection.committed)

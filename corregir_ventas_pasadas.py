@@ -1,5 +1,5 @@
-import sqlite3
 import shutil
+import sqlite3
 from datetime import datetime
 
 DATABASE = 'clinica.db'
@@ -12,7 +12,8 @@ def sincronizar_ventas_inventario():
     try:
         shutil.copyfile(DATABASE, f"clinica_backup_{timestamp}.db")
         print(f"1. Backup creado: clinica_backup_{timestamp}.db")
-    except Exception as e:
+    # Abort the repair and preserve its previous behavior for every backup failure.
+    except Exception as e:  # noqa: BLE001
         print(f"Error creando backup: {e}")
         return
 
@@ -87,7 +88,8 @@ def sincronizar_ventas_inventario():
         else:
             print("\n--- Todo parece correcto. No se encontraron ventas sin descontar. ---")
 
-    except Exception as e:
+    # Roll back for any failure so this manual repair never leaves a partial transaction.
+    except Exception as e:  # noqa: BLE001
         print(f"ERROR CRÍTICO: {e}")
         conn.rollback()
     finally:

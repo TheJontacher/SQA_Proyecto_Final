@@ -15,9 +15,9 @@ Cada migración corre en una sola transacción y, antes de empezar, se guarda
 un respaldo completo en ``backups/``.
 """
 import os
-import sys
 import secrets
 import sqlite3
+import sys
 from datetime import datetime
 
 from werkzeug.security import generate_password_hash
@@ -659,7 +659,7 @@ def inicializar_base_de_datos(ruta=None, verbose=True):
             conn.execute('ROLLBACK')
             raise
         if verbose:
-            print('Base de datos lista (versión %d).' % VERSION_ESQUEMA)
+            print(f'Base de datos lista (versión {VERSION_ESQUEMA}).')
     finally:
         conn.close()
     return clave_inicial
@@ -674,12 +674,11 @@ if __name__ == '__main__':
     if '--respaldo' in sys.argv:
         print('Respaldo guardado en:', respaldar_base(DATABASE_NAME, 'manual'))
         sys.exit(0)
-    if '--reset' in sys.argv:
-        if os.path.exists(DATABASE_NAME):
-            if input(f"Esto vaciará '{DATABASE_NAME}' (se guardará un respaldo). Escribe BORRAR para continuar: ").strip() != 'BORRAR':
-                sys.exit('Cancelado. No se tocó nada.')
-            print('Respaldo:', respaldar_base(DATABASE_NAME, 'antes_de_reiniciar'))
-            os.remove(DATABASE_NAME)
+    if '--reset' in sys.argv and os.path.exists(DATABASE_NAME):
+        if input(f"Esto vaciará '{DATABASE_NAME}' (se guardará un respaldo). Escribe BORRAR para continuar: ").strip() != 'BORRAR':
+            sys.exit('Cancelado. No se tocó nada.')
+        print('Respaldo:', respaldar_base(DATABASE_NAME, 'antes_de_reiniciar'))
+        os.remove(DATABASE_NAME)
     clave = inicializar_base_de_datos()
     if clave:
         print(f'Usuario inicial: admin   Contraseña: {clave}   (cámbiala al entrar)')

@@ -353,8 +353,8 @@ def estado_de_resultados(db, desde, hasta):
                WHERE g.estado = 'Registrado' AND g.fecha_gasto BETWEEN ? AND ?
                GROUP BY c.nombre, c.clasificacion ORDER BY SUM(g.monto) DESC""",
             (desde.isoformat(), hasta.isoformat()))]
-    fijos = sum((t for _, c, t in por_categoria if c == 'fijo'), Decimal('0'))
-    variables = sum((t for _, c, t in por_categoria if c == 'variable'), Decimal('0'))
+    fijos = sum((t for _, c, t in por_categoria if c == 'fijo'), Decimal(0))
+    variables = sum((t for _, c, t in por_categoria if c == 'variable'), Decimal(0))
 
     ini, fin = inicio_utc(desde), fin_utc(hasta)
     otros = D(db.execute("SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja WHERE tipo = 'ingreso' AND naturaleza = 'otro_ingreso' AND creado_en BETWEEN ? AND ?", (ini, fin)).fetchone()[0]) \
@@ -415,19 +415,19 @@ def flujo_de_dinero(db, desde, hasta):
     """Entradas y salidas REALES de dinero en el periodo. Los traslados entre cuentas (apertura y
     cierre de caja, consolidación) se muestran aparte: no es dinero que entra ni sale de la clínica."""
     entradas, salidas, internos = {}, {}, {}
-    financiamiento = Decimal('0')
+    financiamiento = Decimal(0)
     for m in movimientos_dinero(db, desde, hasta):
         if m['tipo'] in FLUJO_INTERNOS:
             etiqueta = FLUJO_INTERNOS[m['tipo']]
-            internos[etiqueta] = internos.get(etiqueta, Decimal('0')) + m['monto']
+            internos[etiqueta] = internos.get(etiqueta, Decimal(0)) + m['monto']
             continue
         etiqueta = FLUJO_CANON.get(m['tipo'], m['tipo'])
         destino = entradas if m['entrada'] else salidas
-        destino[etiqueta] = destino.get(etiqueta, Decimal('0')) + m['monto']
+        destino[etiqueta] = destino.get(etiqueta, Decimal(0)) + m['monto']
         if m['entrada'] and m['naturaleza'] in NATURALEZAS_FINANCIAMIENTO:
             financiamiento += m['monto']
-    total_entradas = sum(entradas.values(), Decimal('0'))
-    total_salidas = sum(salidas.values(), Decimal('0'))
+    total_entradas = sum(entradas.values(), Decimal(0))
+    total_salidas = sum(salidas.values(), Decimal(0))
     ordenar = lambda d: sorted(d.items(), key=lambda kv: kv[1], reverse=True)
     return {
         'entradas': ordenar(entradas), 'salidas': ordenar(salidas), 'internos': ordenar(internos),
@@ -448,17 +448,18 @@ def obligaciones_al_corte(db, corte):
         pagado = {r[0]: D(r[1]) for r in db.execute(
             f"SELECT {col_cuenta}, SUM(monto) FROM {tabla_pagos} WHERE {col_fecha_pago} <= ? GROUP BY {col_cuenta}", (fin,))}
         con_pagos = {r[0] for r in db.execute(f"SELECT DISTINCT {col_cuenta} FROM {tabla_pagos}")}
-        pendiente = vencido = vence_hoy = vence_7 = Decimal('0')
+        pendiente = vencido = vence_hoy = vence_7 = Decimal(0)
         for c in cuentas:
             if es_hoy:
-                saldo = max(Decimal('0'), D(c['saldo_pendiente']))
+                saldo = max(Decimal(0), D(c['saldo_pendiente']))
             elif c['estado'] == PAGADA and c['id'] not in con_pagos:
                 # Cuenta saldada antes de que existieran los registros de pago: se tiene por pagada
                 # desde su fecha de pago.
-                fecha_pago = a_datetime(c['fecha_pago']) if 'fecha_pago' in c.keys() else None
-                saldo = Decimal('0') if fecha_pago is None or fecha_pago.date() <= corte else D(c['monto'])
+                # sqlite3.Row membership checks values, so inspect its column-name keys explicitly.
+                fecha_pago = a_datetime(c['fecha_pago']) if 'fecha_pago' in c.keys() else None  # noqa: SIM118
+                saldo = Decimal(0) if fecha_pago is None or fecha_pago.date() <= corte else D(c['monto'])
             else:
-                saldo = max(Decimal('0'), D(c['monto']) - pagado.get(c['id'], Decimal('0')))
+                saldo = max(Decimal(0), D(c['monto']) - pagado.get(c['id'], Decimal(0)))
             pendiente += saldo
             vence = c['fecha_vencimiento']
             if not vence or saldo <= 0:
