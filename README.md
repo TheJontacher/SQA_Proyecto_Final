@@ -108,3 +108,32 @@ y, si se quiere, enviar por correo (hasta 5 destinatarios). Cada reporte queda g
 - Compara con el periodo anterior de la misma duración y responde con resumen, análisis, alertas y recomendaciones priorizadas.
 - Una consulta a OpenAI puede tardar hasta ~1 minuto: en gunicorn usa `--timeout 150` (`gunicorn app:app --timeout 150`).
 - Solo administradores. El token nunca se muestra ni se escribe en la auditoría.
+
+## Aseguramiento de calidad
+
+El proyecto incluye un pipeline de GitHub Actions con cuatro jobs obligatorios: BUILD (sintaxis), TEST (91 pruebas con SQLite temporal y cobertura), ANALYZE (Ruff y SonarQube Cloud) y REPORT (resumen y evidencias seguras). El workflow se ejecuta al hacer push a `main` y en Pull Requests hacia `main`; la protección de rama requiere Pull Request y los cuatro checks.
+
+Herramientas: `unittest`, `tests/ejecutar.py`, Coverage.py 7.17.2, Ruff 0.17.3, GitHub Actions y SonarQube Cloud. La medición local documentada es 72,79% de cobertura de líneas en nueve módulos, por encima del quality gate mínimo del 60%. Ruff finalizó con cero hallazgos bajo la configuración vigente. El Quality Gate de SonarQube Cloud pasó en el análisis consultado, aunque el dashboard conserva una vulnerabilidad global abierta que se documenta en los informes.
+
+Comandos desde la raíz del proyecto:
+
+```bash
+python tests/ejecutar.py
+python tests/ejecutar.py --coverage
+python -m ruff check .
+```
+
+Las pruebas deben ejecutarse mediante el runner, que crea un proceso y una base SQLite temporal por suite. No se debe ejecutar `database.py --reset` ni apuntar las pruebas a bases reales.
+
+Documentación SQA:
+
+- [Plan de Aseguramiento de Calidad](docs/SQA-Plan.md)
+- [Matriz de las 91 pruebas](docs/Matriz-Pruebas.md)
+- [Línea base de calidad](docs/Linea-Base-Calidad.md)
+- [Reporte de mejora](docs/Reporte-Mejora.md)
+- [Manual técnico](docs/Manual-Tecnico.md)
+- [Guía de evidencias](docs/GUIA_EVIDENCIAS.md)
+- [Reporte de cobertura](docs/REPORTE_COBERTURA_INICIAL.md)
+- [Implementación CI/CD](docs/IMPLEMENTACION_CICD.md)
+
+Repositorio: [TheJontacher/SQA_Proyecto_Final](https://github.com/TheJontacher/SQA_Proyecto_Final) · Pull Request integrado: [#1](https://github.com/TheJontacher/SQA_Proyecto_Final/pull/1) · [Run verde de GitHub Actions](https://github.com/TheJontacher/SQA_Proyecto_Final/actions/runs/41961032413) · [Proyecto SonarQube Cloud](https://sonarcloud.io/project/overview?id=TheJontacher_SQA_Proyecto_Final).

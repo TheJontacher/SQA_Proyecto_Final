@@ -109,9 +109,11 @@ El fallo de logout identificado anteriormente quedó resuelto:
 - **POST con CSRF válido:** `logout_user()` elimina la sesión autenticada y la respuesta redirige a `/login`.
 - **Interfaz:** el botón “Cerrar Sesión” en el layout envía un formulario POST con token CSRF.
 
-En dos ejecuciones completas intermedias se observó una falla intermitente en `test_60_la_conciliacion_cuadra_tras_todo_lo_anterior` (`Pago de cuenta por pagar #2: sin movimiento de dinero`). La última ejecución completa volvió a aprobar las tres suites, incluida esa verificación. No se modificó la lógica financiera ni esa prueba.
+En ejecuciones intermedias se observó una falla intermitente en `test_60_la_conciliacion_cuadra_tras_todo_lo_anterior` (`Pago de cuenta por pagar #2: sin movimiento de dinero`). El análisis posterior reprodujo la causa en el fixture: el pago legado tomaba `CURRENT_TIMESTAMP` y podía quedar en el mismo segundo que el corte de tesorería, cuya fecha de inicialización tiene precisión de segundos. La fixture ahora fija una fecha histórica anterior al corte y verifica esa condición. No se cambió la lógica financiera ni se relajó la aserción.
 
-No quedan fallos en la ejecución completa final; la incidencia financiera intermitente se deja registrada como observación para seguimiento.
+También se corrigió una prueba de reporte que dependía de `date.today()` del host cuando la fecha del host UTC y la fecha clínica UTC−6 estaban en días distintos. La prueba utiliza `comun.hoy_local()` para el filtro del reporte; el test que comprueba edad conserva la fecha de sistema que emplea su comportamiento productivo.
+
+La ejecución posterior de CI en [run #41961032413](https://github.com/TheJontacher/SQA_Proyecto_Final/actions/runs/41961032413) ejecutó 29 + 44 + 18 = 91 pruebas, verificó el total esperado y terminó con los cuatro jobs en éxito. La incidencia queda documentada como causa corregida en los datos de prueba; cualquier regresión futura debe investigarse sin reintentos automáticos ni cambios especulativos a las reglas contables.
 
 ## Comando recomendado
 
