@@ -11,6 +11,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -62,7 +63,7 @@ def crear_base_antigua():
     # Facturas de proveedores antiguas (gastos): una pagada, una pendiente con abono parcial
     conn.execute("INSERT INTO gastos (descripcion, proveedor, monto, fecha_emision, fecha_vencimiento, estado, fecha_pago, saldo_pendiente) VALUES ('Factura 1', 'Distribuidora Uno', 500, '2025-12-01', '2026-01-01', 'Pagado', '2026-01-02', 0)")
     conn.execute("INSERT INTO gastos (descripcion, proveedor, monto, fecha_emision, fecha_vencimiento, estado, saldo_pendiente) VALUES ('Factura 2', ' distribuidora uno ', 1000, '2026-01-02', '2026-02-01', 'Parcial', 700)")
-    conn.execute("INSERT INTO abonos_gastos (id_gasto, monto, metodo_pago, saldo_actual_snapshot) VALUES (2, 300, 'Transferencia', 700)")
+    conn.execute("INSERT INTO abonos_gastos (id_gasto, fecha_abono, monto, metodo_pago, saldo_actual_snapshot) VALUES (2, '2026-01-03 10:00:00', 300, 'Transferencia', 700)")
     conn.commit()
     conn.close()
 
@@ -72,6 +73,11 @@ crear_base_antigua()
 import app as aplicacion  # noqa: E402  (al importarse migra la base)
 import comun  # noqa: E402
 import finanzas as fin  # noqa: E402
+
+
+def fecha_gasto_pasada():
+    return (comun.hoy_local() - timedelta(days=1)).isoformat()
+
 
 aplicacion.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, UPLOAD_FOLDER=os.path.join(TMP, 'uploads'))
 os.makedirs(aplicacion.app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -122,6 +128,9 @@ class Test1Migracion(unittest.TestCase):
         self.assertEqual(cuentas[1]['saldo_pendiente'], 700)
         self.assertEqual(cuentas[0]['proveedor'], cuentas[1]['proveedor'], 'el mismo proveedor escrito distinto es uno solo')
         self.assertEqual(uno('SELECT COUNT(*) FROM pagos_cxp'), 1)
+        fecha_pago_legado = uno('SELECT fecha_pago FROM pagos_cxp WHERE id = 1')
+        inicio_tesoreria = uno("SELECT valor FROM configuracion WHERE clave = 'tesoreria_desde'")
+        self.assertLess(fecha_pago_legado, inicio_tesoreria, 'el pago del fixture es anterior a la activación de tesorería')
 
     def test_el_efectivo_del_turno_abierto_se_conserva(self):
         turno = consulta("SELECT * FROM cierres_caja WHERE estado = 'Abierta'")[0]
@@ -313,7 +322,7 @@ class Test2Flujos(unittest.TestCase):
     # ---- gastos y cuentas por pagar ----
     def test_30_gastos(self):
         categoria = uno("SELECT id FROM categorias_gasto WHERE nombre = 'Alquiler'")
-        base = {'id_categoria': str(categoria), 'fecha_gasto': '2026-10-01', 'descripcion': 'Alquiler de octubre'}
+        base = {'id_categoria': str(categoria), 'fecha_gasto': fecha_gasto_pasada(), 'descripcion': 'Alquiler de prueba'}
         self.post('/gastos/nuevo', monto='9999', forma_pago='efectivo', **base)       # más que la caja
         self.assertEqual(uno('SELECT COUNT(*) FROM gastos'), 0)
         self.post('/gastos/nuevo', monto='80', forma_pago='efectivo', **base)
@@ -417,7 +426,7 @@ class Test2Flujos(unittest.TestCase):
             nuevo.post('/login', data={'username': 'admin', 'password': 'Admin12345', 'csrf_token': token})
             self.assertEqual(nuevo.get('/caja').status_code, 200)
             antes = uno('SELECT COUNT(*) FROM gastos')
-            nuevo.post('/gastos/nuevo', data={'monto': '1', 'forma_pago': 'fondo', 'id_categoria': '1', 'descripcion': 'sin token', 'fecha_gasto': '2026-10-01'})
+            nuevo.post('/gastos/nuevo', data={'monto': '1', 'forma_pago': 'fondo', 'id_categoria': '1', 'descripcion': 'sin token', 'fecha_gasto': fecha_gasto_pasada()})
             self.assertEqual(uno('SELECT COUNT(*) FROM gastos'), antes, 'un POST sin token no debe registrar nada')
         finally:
             aplicacion.app.config['WTF_CSRF_ENABLED'] = False

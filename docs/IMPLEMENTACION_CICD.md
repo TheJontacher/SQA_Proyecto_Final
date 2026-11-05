@@ -39,6 +39,7 @@ Los jobs `BUILD`, `TEST` y `ANALYZE` son dependencias obligatorias de `REPORT`. 
 - Se ejecuta solo después de BUILD exitoso.
 - Ejecuta `python tests/ejecutar.py --coverage`; el runner inicia cada suite en su propio proceso y directorio temporal.
 - Comprueba la salida de las suites y falla si el total no es exactamente 91, además de conservar el código de salida del runner.
+- Si falla una prueba, muestra su nombre, archivo/línea y tipo/motivo resumido. No vuelca las salidas completas, tokens CSRF ni cuerpos HTML al log; las bases y archivos de prueba permanecen en directorios temporales.
 - Genera el reporte de consola/XML/HTML y aplica `coverage report --fail-under=60`.
 - Falla si alguna suite falla o el porcentaje es menor a 60%.
 - Publica por siete días `coverage.xml`, `htmlcov/` y `.coverage.sqa`, incluso si fallan las pruebas y esos reportes llegaron a generarse.

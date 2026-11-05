@@ -295,7 +295,7 @@ class ClinicRegressionTests(unittest.TestCase):
                 "metodo_pago": "Efectivo",
             },
         )
-        today = date.today().isoformat()
+        today = comun.hoy_local().isoformat()
         report = self.client.get(f"/reportes/productos?desde={today}&hasta={today}")
         self.assertEqual(report.status_code, 200)
         self.assertIn("Q100.00", report.get_data(as_text=True))

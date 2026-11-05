@@ -34,6 +34,91 @@ if solicitados:
     archivos = [modulos[modulo] for modulo in solicitados]
 fallos = 0
 resumenes = []
+
+
+def texto_diagnostico_seguro(mensaje):
+    """Reduce los cuerpos de respuesta y valores sensibles antes de imprimir fallos."""
+    mensaje = re.sub(r'\x1b\[[0-9;]*m', '', mensaje)
+    if '<html' in mensaje.lower() or '<!doctype html' in mensaje.lower():
+        return 'la respuesta HTML no coincide; se omitió su contenido'
+    if ' not found in ' in mensaje or ' not in ' in mensaje:
+        return 'no se encontró el contenido esperado; se omitió la respuesta'
+    for valor in (
+        'isolated-test-admin-password',
+        'Admin12345',
+        'Cajera12345',
+        'clave-de-prueba',
+        'Wjt0ZfG4m9mS5y0y2o5l0tQ1w3e6r8t0y2u4i6o8pA=',
+    ):
+        mensaje = mensaje.replace(valor, '<redactado>')
+    mensaje = re.sub(
+        r'(?i)\b(password|passwd|secret|token|authorization|cookie|csrf)'
+        r'([\'"]?\s*[:=]\s*[\'"]?)[^,\s\'"]+',
+        r'\1\2<redactado>',
+        mensaje,
+    )
+    return mensaje[:300] + ('…' if len(mensaje) > 300 else '')
+
+
+def informar_fallos(modulo, salida):
+    """Publica nombres y motivos resumidos, sin volcar datos de pruebas o respuestas."""
+    encabezados = list(re.finditer(r'^(FAIL|ERROR): (.+)$', salida, re.MULTILINE))
+    for indice, encabezado in enumerate(encabezados):
+        fin = encabezados[indice + 1].start() if indice + 1 < len(encabezados) else len(salida)
+        bloque = salida[encabezado.start():fin]
+        print(f'TEST FAILURE: {encabezado.group(2)}', flush=True)
+        marcos = re.findall(
+            r'File "([^"]+)", line (\d+), in ([^\r\n]+)',
+            bloque,
+        )
+        marcos_prueba = []
+        for marco in marcos:
+            try:
+                raiz_comun = os.path.commonpath((RAIZ, os.path.realpath(marco[0])))
+            except ValueError:
+                continue
+            if os.path.normcase(raiz_comun) == os.path.normcase(RAIZ):
+                marcos_prueba.append(marco)
+        if marcos_prueba:
+            ruta, linea, funcion = marcos_prueba[-1]
+            ruta_relativa = os.path.relpath(ruta, RAIZ).replace(os.sep, '/')
+            print(f'TEST LOCATION: {ruta_relativa}:{linea} ({funcion})', flush=True)
+        excepciones = re.findall(
+            r'^\s*([A-Za-z_][\w.]*(?:Error|Exception))(?::\s*(.*))?$',
+            bloque,
+            re.MULTILINE,
+        )
+        if excepciones:
+            tipo, mensaje = excepciones[-1]
+            razon = texto_diagnostico_seguro(mensaje or '')
+            print(
+                f'TEST REASON: {tipo}'
+                + (f': {razon}' if razon else ''),
+                flush=True,
+            )
+        else:
+            print('TEST REASON: no se pudo extraer el tipo de error', flush=True)
+
+    if not encabezados:
+        print(
+            f'TEST FAILURE: {modulo} salió con error sin un registro FAIL/ERROR de unittest',
+            flush=True,
+        )
+        excepciones = re.findall(
+            r'^\s*([A-Za-z_][\w.]*(?:Error|Exception))(?::\s*(.*))?$',
+            salida,
+            re.MULTILINE,
+        )
+        if excepciones:
+            tipo, mensaje = excepciones[-1]
+            razon = texto_diagnostico_seguro(mensaje or '')
+            print(
+                f'TEST REASON: {tipo}'
+                + (f': {razon}' if razon else ''),
+                flush=True,
+            )
+
+
 cobertura_env = os.environ.copy()
 cobertura_env['COVERAGE_FILE'] = os.path.join(RAIZ, '.coverage.sqa')
 if opciones.coverage:
@@ -99,11 +184,17 @@ for archivo in archivos:
             text=True,
         )
         salida = resultado.stdout + resultado.stderr
-        print(salida, end='' if salida.endswith('\n') else '\n', flush=True)
         coincidencia = re.search(r'^Ran (\d+) tests? in ', salida, re.MULTILINE)
-        resumenes.append((modulo, int(coincidencia.group(1)) if coincidencia else None, resultado.returncode))
+        cantidad = int(coincidencia.group(1)) if coincidencia else None
+        resumenes.append((modulo, cantidad, resultado.returncode))
+        if cantidad is not None:
+            print(f'Ran {cantidad} tests in isolated process', flush=True)
         if resultado.returncode:
+            informar_fallos(modulo, salida)
             fallos += 1
+            print('FAILED', flush=True)
+        else:
+            print('OK', flush=True)
 
 print('\n== Resumen')
 for modulo, pruebas, codigo in resumenes:
