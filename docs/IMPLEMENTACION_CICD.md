@@ -1,12 +1,12 @@
 # Implementación de CI/CD con GitHub Actions
 
-## Alcance y estado
+## Alcance y estado verificado
 
-Se preparó un pipeline de integración continua para la aplicación Flask existente. Ejecuta build/sintaxis, las suites aisladas, el quality gate de cobertura, Ruff y, una vez configurado el proyecto, SonarCloud. No incluye Docker ni despliegue.
+El pipeline de integración continua de la aplicación Flask está configurado y cuenta con ejecuciones reales en GitHub Actions. Ejecuta build/sintaxis, suites aisladas, el quality gate de cobertura, Ruff y SonarQube Cloud. No incluye Docker ni despliegue.
 
 La aplicación inicializa SQLite durante la importación de `app.py`. El workflow no la importa en BUILD; TEST invoca `tests/ejecutar.py --coverage`, que crea un directorio temporal independiente por suite y configura allí la base y sus respaldos antes de arrancar cada proceso. Ningún artefacto publicado incluye bases, respaldos, uploads, `instance/` ni logs de pruebas.
 
-La configuración local está preparada, pero **no se ha ejecutado en GitHub Actions ni se ha conectado a SonarCloud**. La validación local no demuestra que las credenciales, variables o Quality Gate remotos estén configurados correctamente.
+La ejecución remota posterior al merge del PR #1 completó BUILD, TEST, ANALYZE y REPORT con éxito: [Actions run #41961032413](https://github.com/TheJontacher/SQA_Proyecto_Final/actions/runs/41961032413). El run de checks del Pull Request está en [#41960545202](https://github.com/TheJontacher/SQA_Proyecto_Final/actions/runs/41960545202). SonarQube Cloud procesó el análisis y el Quality Gate consultado fue `OK`. Esto describe esos runs, no garantiza el resultado de cambios futuros.
 
 ## Arquitectura
 
@@ -106,37 +106,32 @@ Validaciones aplicadas a los archivos generados:
 - Tests/cobertura: ejecutar el comando aislado indicado; no usar `unittest discover` directo porque las suites comparten globals e inicializan la base al importar.
 - SonarCloud: no verificable localmente hasta configurar e invocar el proyecto remoto.
 
-## Configuración manual requerida en GitHub
+## Configuración y operación en GitHub
 
-### 1. Preparar el repositorio y `main`
+### 1. Estado del repositorio y `main`
 
-1. Asegúrate de que estos cambios y los documentos/requisitos previos estén en la rama del repositorio cuyo nombre predeterminado será `main`.
-2. No agregues `clinica.db`, otros `*.db`/`*.sqlite*`, carpetas `backups/`, `uploads/`, `instance/` ni datos clínicos al commit. El workflow solo publica rutas explícitamente permitidas.
-3. En **Settings → Actions → General**, confirma que se permitan GitHub Actions y las acciones del marketplace usadas por el workflow.
+El workflow ya fue ejecutado en el repositorio con rama predeterminada `main`. El ruleset activo `Proteccion-main` requiere Pull Request, checks `BUILD`, `TEST`, `ANALYZE` y `REPORT`, y resolución de conversaciones. No se configuró requisito de aprobación de reviewer.
+
+No agregues `clinica.db`, otros `*.db`/`*.sqlite*`, carpetas `backups/`, `uploads/`, `instance/` ni datos clínicos al commit. El workflow solo publica rutas explícitamente permitidas.
 
 ### 2. Crear/configurar el proyecto en SonarCloud
 
-1. Inicia sesión en SonarCloud con GitHub e importa el repositorio real.
-2. Selecciona la organización que realmente contiene el proyecto y copia su **organization key**.
-3. Copia el **project key** del proyecto creado/importado.
-4. Genera un token de análisis desde SonarCloud con permisos de análisis para ese proyecto. No inventes ni reutilices credenciales de producción.
-5. En GitHub, abre **Settings → Secrets and variables → Actions**:
+El repositorio ya tiene conexión y un Quality Gate observado como aprobado en el proyecto [Sistema de Gestion Clinica](https://sonarcloud.io/project/overview?id=TheJontacher_SQA_Proyecto_Final). El workflow consume las variables `SONAR_ORGANIZATION`, `SONAR_PROJECT_KEY` y el secreto `SONAR_TOKEN`. Para rotar credenciales o migrar de organización:
+
+1. Confirma los valores reales desde SonarQube Cloud; no copies tokens en archivos ni logs.
+2. En GitHub, abre **Settings → Secrets and variables → Actions**:
    - **New repository secret:** `SONAR_TOKEN` = token real de análisis.
    - **New repository variable:** `SONAR_ORGANIZATION` = organization key real.
    - **New repository variable:** `SONAR_PROJECT_KEY` = project key real.
-6. Conserva el Quality Gate deseado en SonarCloud y confirma que la cuenta/token tenga permiso de análisis. El workflow espera hasta 300 segundos por el resultado; un gate fallido hace fallar ANALYZE.
+3. Conserva el Quality Gate de SonarCloud y confirma permisos de análisis. Un gate fallido hace fallar ANALYZE.
 
 No se colocan identificadores inventados en `sonar-project.properties`: el workflow entrega los dos valores reales al scanner como propiedades `-Dsonar.organization` y `-Dsonar.projectKey`. `SONAR_TOKEN` se suministra solo como variable de entorno de las acciones oficiales y nunca se escribe en un archivo o línea de comando.
 
 ### 3. Activar workflow y proteger PRs
 
-1. Publica el workflow a GitHub manualmente (commit y push los realiza el responsable del repositorio; no se hizo desde esta sesión).
-2. Verifica **Actions → Clinic SQA CI**. El primer run se dispara al hacer push a `main` o abrir/sincronizar un PR con destino `main`.
-3. En **Settings → Branches** o **Rules → Rulesets**, crea regla para `main`:
-   - exigir Pull Request antes de merge;
-   - exigir los checks `BUILD`, `TEST`, `ANALYZE` y `REPORT`;
-   - bloquear pushes directos según política del curso/equipo.
-4. No marques el primer workflow como validado hasta inspeccionar su run completo y confirmar el artifact `coverage-report`, `ruff-report` y `ci-summary`.
+1. En **Actions → Clinic SQA CI**, inspecciona el run más reciente y su SHA.
+2. Verifica el artifact de cobertura y el resumen REPORT. La retención del artifact es limitada.
+3. Revisa periódicamente que el ruleset siga requiriendo PR y los cuatro checks.
 
 En un PR desde un fork, SonarCloud se omite por la protección de secretos de GitHub. Si la rúbrica requiere el gate Sonar en cada PR externo, usa una estrategia de contribución segura (por ejemplo, ejecución manual del responsable en una rama confiable); no expongas el token a código de forks.
 
@@ -153,12 +148,12 @@ En un PR desde un fork, SonarCloud se omite por la protección de secretos de Gi
 
 No capturar ni incluir valores secretos, DBs, respaldos, uploads, carpetas `instance/` o datos clínicos.
 
-## Limitaciones y pasos pendientes
+## Limitaciones y seguimiento
 
-- No hay organización, project key ni token real proporcionados en este entorno. SonarCloud queda preparado pero el workflow rechazará un push a `main` o PR interno hasta que se configuren los dos variables y el secreto requeridos.
-- No existe una ejecución de GitHub Actions de este pipeline todavía; la sintaxis local y las pruebas locales no demuestran una ejecución remota.
+- La existencia de runs verdes demuestra ejecuciones remotas concretas, no garantiza el resultado de futuros cambios.
 - Pull requests desde forks no reciben `SONAR_TOKEN`, así que su Quality Gate remoto no se verifica en ese evento.
 - El proyecto no documenta oficialmente su matriz soportada de Python. CI selecciona Python 3.12 conforme a la recomendación del análisis, no como certificación de todas las versiones.
 - `requirements.txt` mantiene rangos amplios para paquetes runtime y no hay lockfile. Las herramientas de calidad están fijadas, pero la resolución transitiva runtime podría variar; generar un lockfile y validar una matriz de Python son mejoras posteriores.
 - No se agregó un umbral de cobertura por módulo ni branch coverage; el Quality Gate local evalúa líneas agregadas del conjunto de nueve módulos y mantiene el mínimo 60%.
 - No hay despliegue automático, Docker, ejecución de migraciones ni servicios externos reales en el pipeline.
+- El análisis SonarQube Cloud consultado tuvo Quality Gate `OK`, pero también reportó una vulnerabilidad global abierta `pythonsecurity:S5146` en `app.py:300`; debe revisarse por separado y no queda resuelta por el gate de código nuevo.
